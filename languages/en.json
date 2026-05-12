@@ -1,0 +1,30 @@
+{
+  "THE_SPIRE": {
+    "Title": "The Spire",
+    "TabLabel": "Spire",
+    "SpireLevel": "Spire Level",
+    "LevelUp": "+1",
+    "UnallocatedPoints": "Unallocated Points",
+    "AddPoint": "Add point",
+    "RemovePoint": "Remove point",
+    "GainLevel": "Gain 1 Spire Level",
+    "WeaponGroups": {
+      "Title": "Weapon Groups",
+      "ConfigTitle": "Weapon/Spell Group Configuration",
+      "ConfigLabel": "Configure Groups",
+      "AddGroup": "Add Group",
+      "RemoveGroup": "Remove Group",
+      "AddItem": "Add",
+      "RemoveItem": "Remove Item",
+      "ItemPlaceholder": "Item name...",
+      "GroupPlaceholder": "Group Name",
+      "Save": "Save",
+      "Saved": "Weapon/Spell Groups saved.",
+      "Level": "Lv",
+      "XP": "XP",
+      "Hit": "hit",
+      "Dice": "dice",
+      "SpellDC": "spell DC"
+    }
+  }
+}

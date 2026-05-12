@@ -1,0 +1,39 @@
+{
+  "id": "the-spire",
+  "title": "The Spire",
+  "description": "Custom level scaling and dice rolling mechanics for D&D 5e.",
+  "version": "0.1.0",
+  "compatibility": {
+    "minimum": "11",
+    "verified": "12"
+  },
+  "relationships": {
+    "systems": [
+      {
+        "id": "dnd5e",
+        "type": "system",
+        "compatibility": {
+          "minimum": "3.0.0"
+        }
+      }
+    ]
+  },
+  "authors": [
+    {
+      "name": "jchristen4"
+    }
+  ],
+  "esmodules": [
+    "scripts/the-spire.mjs"
+  ],
+  "styles": [
+    "styles/the-spire.css"
+  ],
+  "languages": [
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "languages/en.json"
+    }
+  ]
+}

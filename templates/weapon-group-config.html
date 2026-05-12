@@ -1,0 +1,75 @@
+<form class="spire-group-config">
+  <div class="weapon-group-list">
+    {{#each groups}}
+    <div class="weapon-group-entry" data-group-id="{{@key}}">
+
+      {{!-- Group Header --}}
+      <div class="group-header">
+        <input type="text" class="group-name-input" value="{{this.name}}" placeholder="Group Name">
+        <button type="button" class="remove-group" title="Remove Group"><i class="fas fa-trash"></i></button>
+      </div>
+
+      {{!-- Items --}}
+      <div class="group-section">
+        <h4>Items</h4>
+        <ul class="group-items-list">
+          {{#each this.items}}
+          <li class="group-item">
+            <span class="item-info">{{this.name}} <em>({{this.type}})</em></span>
+            <button type="button" class="remove-item" data-index="{{@index}}" title="Remove Item"><i class="fas fa-times"></i></button>
+          </li>
+          {{/each}}
+        </ul>
+        <div class="add-item-row">
+          <input type="text" class="new-item-name" placeholder="Item name...">
+          <select class="new-item-type">
+            <option value="weapon">Weapon</option>
+            <option value="spell">Spell</option>
+          </select>
+          <button type="button" class="add-item" title="Add Item"><i class="fas fa-plus"></i> Add</button>
+        </div>
+      </div>
+
+      {{!-- Scaling Parameters --}}
+      <div class="group-section">
+        <h4>Scaling (per level, 0 = disabled)</h4>
+        <div class="scaling-grid">
+          <label>Range (ft)</label>
+          <input type="number" class="scaling-input" data-param="range" value="{{this.scaling.range}}" min="0" step="5">
+          <label>Duration (x multiplier)</label>
+          <input type="number" class="scaling-input" data-param="duration" value="{{this.scaling.duration}}" min="0" step="0.5">
+          <label>Extra Targets</label>
+          <input type="number" class="scaling-input" data-param="targets" value="{{this.scaling.targets}}" min="0" step="1">
+          <label>Area (ft)</label>
+          <input type="number" class="scaling-input" data-param="area" value="{{this.scaling.area}}" min="0" step="5">
+        </div>
+        <p class="hint">Only applies to items that have the relevant property. Weapons ignore spell-specific scaling and vice versa.</p>
+      </div>
+
+      {{!-- Milestones --}}
+      <div class="group-section">
+        <h4>Milestones</h4>
+        <ul class="group-milestones-list">
+          {{#each this.milestones}}
+          <li class="group-milestone">
+            <strong>Lv {{this.level}}:</strong>
+            <span>{{this.text}}</span>
+            <button type="button" class="remove-milestone" data-index="{{@index}}" title="Remove"><i class="fas fa-times"></i></button>
+          </li>
+          {{/each}}
+        </ul>
+        <div class="add-milestone-row">
+          <input type="number" class="new-milestone-level" placeholder="Lv" min="1" step="1">
+          <input type="text" class="new-milestone-text" placeholder="Milestone description...">
+          <button type="button" class="add-milestone" title="Add Milestone"><i class="fas fa-plus"></i> Add</button>
+        </div>
+      </div>
+
+    </div>
+    {{/each}}
+  </div>
+  <div class="group-config-actions">
+    <button type="button" class="add-group"><i class="fas fa-plus"></i> Add Group</button>
+    <button type="button" class="save-groups"><i class="fas fa-save"></i> Save</button>
+  </div>
+</form>

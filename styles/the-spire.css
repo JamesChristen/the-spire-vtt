@@ -1,0 +1,503 @@
+/* The Spire - Module Styles */
+
+.dnd5e .tab.spire {
+  padding: 0.5rem 1rem;
+}
+
+/* Header: level + unallocated */
+.dnd5e .spire-header {
+  margin-bottom: 1rem;
+}
+
+.dnd5e .spire-level {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.dnd5e .spire-level h3 {
+  margin: 0;
+  border: none;
+}
+
+.dnd5e .spire-level-up {
+  width: 2rem;
+  height: 2rem;
+  font-weight: bold;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.dnd5e .spire-points {
+  font-size: 0.875rem;
+  color: #4b4a44;
+}
+
+.dnd5e .spire-unallocated {
+  color: #18520b;
+}
+
+/* Stat grid */
+.dnd5e .spire-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+.dnd5e .spire-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #7a7971;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.dnd5e .spire-stat-label {
+  font-weight: bold;
+  width: 2.5rem;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+}
+
+.dnd5e .spire-stat-original {
+  width: 1.5rem;
+  text-align: center;
+  font-size: 0.75rem;
+  color: #7a7971;
+}
+
+.dnd5e .spire-stat button {
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  line-height: 1;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.dnd5e .spire-stat button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.dnd5e .spire-stat-value {
+  width: 1.5rem;
+  text-align: center;
+  font-weight: bold;
+}
+
+.dnd5e .spire-stat-bonus {
+  color: #18520b;
+  font-weight: bold;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.dnd5e .spire-stat-perk {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: #544e80;
+  font-style: italic;
+  white-space: nowrap;
+}
+
+/* Weapon Groups Section */
+.dnd5e .spire-weapon-groups {
+  margin-top: 1rem;
+  border-top: 1px solid #7a7971;
+  padding-top: 0.5rem;
+}
+
+.dnd5e .spire-weapon-groups h3 {
+  margin: 0 0 0.5rem 0;
+  border: none;
+}
+
+.dnd5e .spire-weapon-group {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #7a7971;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.03);
+  margin-bottom: 0.4rem;
+}
+
+.dnd5e .group-row-main {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dnd5e .group-name {
+  font-weight: bold;
+  font-size: 0.85rem;
+  flex: 1;
+}
+
+.dnd5e .group-level {
+  font-weight: bold;
+  color: #18520b;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.dnd5e .group-xp-input {
+  width: 3.5rem;
+  text-align: center;
+  font-size: 0.8rem;
+}
+
+.dnd5e .group-xp-value {
+  font-size: 0.8rem;
+  width: 3.5rem;
+  text-align: center;
+}
+
+.dnd5e .group-xp-label {
+  font-size: 0.75rem;
+  color: #7a7971;
+}
+
+.dnd5e .group-row-detail {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  margin-top: 0.2rem;
+}
+
+.dnd5e .group-bonuses {
+  color: #544e80;
+  font-style: italic;
+}
+
+.dnd5e .group-items {
+  color: #7a7971;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 50%;
+  text-align: right;
+}
+
+.dnd5e .group-milestones {
+  list-style: none;
+  padding: 0;
+  margin: 0.25rem 0 0 0;
+  font-size: 0.75rem;
+}
+
+.dnd5e .group-milestones li {
+  padding: 0.1rem 0;
+  color: #544e80;
+}
+
+/* Chat message: scaling info + milestones */
+.spire-item-scaling {
+  padding: 0.25rem 0;
+  font-size: 0.85rem;
+}
+
+.spire-item-scaling strong {
+  color: #544e80;
+}
+
+.spire-scaling-bonuses {
+  font-size: 0.8rem;
+  color: #18520b;
+  margin: 0.2rem 0;
+}
+
+.spire-milestones {
+  list-style: none;
+  padding: 0;
+  margin: 0.25rem 0 0 0;
+}
+
+.spire-milestones li {
+  padding: 0.1rem 0;
+  font-size: 0.8rem;
+}
+
+/* GM Config Window */
+.spire-group-config {
+  padding: 0.5rem;
+}
+
+.spire-group-config .weapon-group-entry {
+  border: 1px solid #7a7971;
+  border-radius: 3px;
+  padding: 0.5rem;
+  margin-bottom: 0.5rem;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.spire-group-config .group-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.spire-group-config .group-name-input {
+  flex: 1;
+  font-weight: bold;
+}
+
+.spire-group-config .group-items-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.4rem 0;
+}
+
+.spire-group-config .group-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.15rem 0.25rem;
+  font-size: 0.85rem;
+}
+
+.spire-group-config .group-item em {
+  color: #7a7971;
+}
+
+.spire-group-config .add-item-row {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.spire-group-config .new-item-name {
+  flex: 1;
+}
+
+.spire-group-config .new-item-type {
+  width: 5rem;
+}
+
+.spire-group-config .group-config-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.spire-group-config .group-config-actions button {
+  flex: 1;
+}
+
+.spire-group-config .group-section {
+  margin-top: 0.5rem;
+  padding-top: 0.4rem;
+  border-top: 1px dashed #c9c7b8;
+}
+
+.spire-group-config .group-section h4 {
+  margin: 0 0 0.3rem 0;
+  font-size: 0.8rem;
+  color: #4b4a44;
+  text-transform: uppercase;
+}
+
+.spire-group-config .scaling-grid {
+  display: grid;
+  grid-template-columns: auto 4rem;
+  gap: 0.25rem 0.5rem;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.spire-group-config .scaling-input {
+  width: 4rem;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.spire-group-config .hint {
+  font-size: 0.7rem;
+  color: #7a7971;
+  font-style: italic;
+  margin: 0.3rem 0 0 0;
+}
+
+.spire-group-config .group-milestones-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.4rem 0;
+}
+
+.spire-group-config .group-milestone {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.15rem 0.25rem;
+  font-size: 0.85rem;
+}
+
+.spire-group-config .group-milestone span {
+  flex: 1;
+}
+
+.spire-group-config .add-milestone-row {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.spire-group-config .new-milestone-level {
+  width: 3rem;
+  text-align: center;
+}
+
+.spire-group-config .new-milestone-text {
+  flex: 1;
+}
+
+/* Net Advantage Control (Roll Dialog) */
+.spire-net-advantage {
+  margin: 0.5rem 0;
+}
+
+.spire-net-advantage label {
+  font-weight: bold;
+  margin-bottom: 0.25rem;
+  display: block;
+}
+
+.spire-net-adv-control {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.spire-net-adv-control button {
+  width: 1.75rem;
+  height: 1.75rem;
+  font-size: 1rem;
+  font-weight: bold;
+  padding: 0;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.spire-net-adv-value {
+  width: 3rem;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: bold;
+}
+
+.spire-net-adv-desc {
+  display: block;
+  font-size: 0.7rem;
+  color: #7a7971;
+  margin-top: 0.2rem;
+  font-style: italic;
+}
+
+/* Potions Tab */
+.dnd5e .tab.potions {
+  padding: 0.5rem 1rem;
+}
+
+.dnd5e .potion-cooldown-active {
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 3px;
+  padding: 0.35rem 0.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+  color: #721c24;
+  font-weight: bold;
+}
+
+.dnd5e .potion-section {
+  margin-bottom: 0.75rem;
+}
+
+.dnd5e .potion-section h3 {
+  margin: 0 0 0.35rem 0;
+  border: none;
+  font-size: 0.9rem;
+}
+
+.dnd5e .potion-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.dnd5e .potion-empty {
+  font-size: 0.8rem;
+  color: #7a7971;
+  font-style: italic;
+}
+
+.dnd5e .potion-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid #7a7971;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.dnd5e .potion-label {
+  font-weight: bold;
+  font-size: 0.85rem;
+  width: 2.5rem;
+}
+
+.dnd5e .potion-count {
+  font-weight: bold;
+  font-size: 0.85rem;
+  width: 2rem;
+  text-align: center;
+}
+
+.dnd5e .potion-effect {
+  font-size: 0.75rem;
+  color: #544e80;
+  font-style: italic;
+  flex: 1;
+}
+
+.dnd5e .potion-row button {
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  line-height: 1;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+/* Add potion row */
+.dnd5e .potion-add-row {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #7a7971;
+}
+
+.dnd5e .potion-add-type {
+  width: 5rem;
+}
+
+.dnd5e .potion-add-level {
+  width: 3rem;
+  text-align: center;
+}
+
+.dnd5e .potion-add-count {
+  width: 3rem;
+  text-align: center;
+}
+
+.dnd5e .potion-add-btn {
+  font-size: 0.8rem;
+  cursor: pointer;
+}
