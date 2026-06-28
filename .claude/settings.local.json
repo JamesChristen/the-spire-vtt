@@ -3,7 +3,8 @@
     "allow": [
       "Bash(xargs grep -l \"prepareDerivedData\\\\|prepareBaseData\")",
       "Bash(awk -F: '$1+0 >= 35921 && $1+0 <= 37000')",
-      "Bash(xargs grep -l \"class.*Actor.*extends\\\\|prepareDerivedData\\(\\)\")"
+      "Bash(xargs grep -l \"class.*Actor.*extends\\\\|prepareDerivedData\\(\\)\")",
+      "Bash(grep -n \"type: \\\\\"attack\\\\\", *$\\\\|type: \\\\\"save\\\\\"\\\\|type: \\\\\"damage\\\\\"\\\\|type: \\\\\"utility\\\\\"\\\\|name: \\\\\"AttackActivityData\\\\\"\\\\|type:\\\\s*\\\\\"attack\\\\\"\" dnd5e.mjs)"
     ]
   }
 }

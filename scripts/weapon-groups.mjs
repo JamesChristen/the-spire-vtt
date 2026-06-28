@@ -67,69 +67,58 @@ function getExtraDiceMultiplier(level) {
   return Math.max(0, Math.floor((level - 1) / 2));
 }
 
-function getBaseDice(item) {
-  // dnd5e 5.x: damage parts may be structured differently via Activities
-  // Try the activity-based damage first, then fall back to legacy
-  const activities = item.system?.activities;
-  if (activities) {
-    for (const activity of activities) {
-      const parts = activity?.damage?.parts;
-      if (parts?.length > 0) {
-        const formula = parts[0]?.formula ?? parts[0]?.[0] ?? "";
-        const match = formula.match(/(\d+)d(\d+)/);
-        if (match) return { count: parseInt(match[1]), size: parseInt(match[2]), full: match[0] };
-      }
-    }
-  }
-  // Legacy fallback
-  const formula = item.system?.damage?.parts?.[0]?.[0] ?? "";
-  const match = formula.match(/(\d+)d(\d+)/);
+// Parse the first "NdM" die out of a damage formula string.
+function parseDieFormula(formula) {
+  const match = String(formula ?? "").match(/(\d+)d(\d+)/);
   if (!match) return null;
-  return { count: parseInt(match[1]), size: parseInt(match[2]), full: match[0] };
+  return { count: parseInt(match[1]), size: parseInt(match[2]) };
 }
 
-function itemHasAttack(item) {
-  // dnd5e 5.x: check activities for attack type
-  const activities = item.system?.activities;
-  if (activities) {
-    for (const activity of activities) {
-      if (activity?.type === "attack") return true;
+// Find the base damage die from a set of roll configs (each with a `parts` array of
+// formula strings). This reads the formula that will actually be rolled, so it works
+// even when the die is injected at roll time (e.g. Monk Martial Arts) and never appears
+// on item.system.damage.base.
+function baseDieFromRolls(rolls) {
+  for (const roll of rolls ?? []) {
+    for (const part of roll?.parts ?? []) {
+      const die = parseDieFormula(part);
+      if (die) return die;
     }
   }
-  // Legacy fallback
-  return !!item.system?.actionType && ["mwak", "rwak", "msak", "rsak"].includes(item.system.actionType);
+  return null;
 }
 
-function itemHasDamage(item) {
-  const activities = item.system?.activities;
-  if (activities) {
-    for (const activity of activities) {
-      if (activity?.damage?.parts?.length > 0) return true;
-    }
+// Resolve an activity's base damage die without rolling, by building its damage config.
+function getActivityBaseDie(activity) {
+  try {
+    return baseDieFromRolls(activity?.getDamageConfig?.({})?.rolls);
+  } catch (err) {
+    console.warn("The Spire | Could not read damage config", err);
+    return null;
   }
-  return item.system?.damage?.parts?.length > 0;
 }
 
-function itemHasSave(item) {
-  const activities = item.system?.activities;
-  if (activities) {
-    for (const activity of activities) {
-      if (activity?.type === "save") return true;
-    }
-  }
-  return !!item.system?.save?.ability;
+// All checks operate on the SPECIFIC activity being used (config/data.subject), not the
+// item — a single item (e.g. the 2024 Unarmed Strike) can carry several activities
+// (Attack + Grapple/Shove saves), so scanning the whole item misreads an attack as a save.
+function activityIsAttack(activity) {
+  return activity?.type === "attack";
 }
 
-function itemHasRange(item) {
-  return (item.system?.range?.value ?? 0) > 0 || (item.system?.range?.long ?? 0) > 0;
+function activityIsSave(activity) {
+  return activity?.type === "save";
 }
 
-function itemHasDuration(item) {
-  return !!item.system?.duration?.value;
+function activityHasRange(activity) {
+  return (activity?.range?.value ?? 0) > 0 || (activity?.range?.long ?? 0) > 0;
 }
 
-function itemHasArea(item) {
-  return (item.system?.target?.value ?? 0) > 0 && !!item.system?.target?.type;
+function activityHasDuration(activity) {
+  return !!activity?.duration?.value;
+}
+
+function activityHasArea(activity) {
+  return !!activity?.target?.template?.type && (Number(activity?.target?.template?.size) > 0);
 }
 
 function getGroupScaling(group) {
@@ -174,7 +163,7 @@ export function handlePreAttack(config, dialogConfig, messageConfig) {
   const item = activity?.item;
   const actor = item?.actor;
   if (!actor || actor.type !== "character") return;
-  if (!itemHasAttack(item)) return;
+  if (!activityIsAttack(activity)) return;
 
   const result = findGroupForItem(item);
   if (!result) return;
@@ -202,24 +191,21 @@ export function handlePreDamage(config, dialogConfig, messageConfig) {
   const item = activity?.item;
   const actor = item?.actor;
   if (!actor || actor.type !== "character") return;
-  if (!itemHasDamage(item)) return;
 
   const result = findGroupForItem(item);
   if (!result) return;
 
-  const level = getGroupLevel(actor, result.groupId);
-  const multiplier = getExtraDiceMultiplier(level);
+  const multiplier = getExtraDiceMultiplier(getGroupLevel(actor, result.groupId));
   if (multiplier <= 0) return;
-
-  const baseDice = getBaseDice(item);
-  if (!baseDice) return;
-
-  const extraDice = `${multiplier * baseDice.count}d${baseDice.size}`;
-
   if (!config.rolls?.length) return;
+
+  // Add extra dice scaled to each roll's own base die, read from the formula that will
+  // actually be rolled — so an Unarmed Strike gets its bonus dice like any other attack.
   for (const roll of config.rolls) {
+    const base = baseDieFromRolls([roll]);
+    if (!base) continue;
     roll.parts ??= [];
-    roll.parts.push(extraDice);
+    roll.parts.push(`${multiplier * base.count}d${base.size}`);
   }
 }
 
@@ -232,7 +218,6 @@ export function handleDamageRoll(rolls, data) {
   const item = activity?.item;
   const actor = item?.actor;
   if (!actor || actor.type !== "character") return;
-  if (!itemHasDamage(item)) return;
 
   const result = findGroupForItem(item);
   if (!result) return;
@@ -240,16 +225,19 @@ export function handleDamageRoll(rolls, data) {
   const ddn = result.group.ddn ?? 0;
   if (ddn <= 0) return;
 
-  const baseDice = getBaseDice(item);
-  if (!baseDice) return;
-  const bd = baseDice.count * baseDice.size;
-  if (bd <= 0) return;
-
-  // Sum only the rolled dice (exclude flat modifiers like ability mod/bonuses).
-  const diceSum = (Array.isArray(rolls) ? rolls : [rolls])
-    .filter(Boolean)
-    .reduce((sum, r) => sum + (r.dice ?? []).reduce((s, d) => s + (d.total ?? 0), 0), 0);
+  // Sum the dice actually rolled (excluding flat modifiers like ability mod). Available for
+  // unarmed strikes exactly like any other attack.
+  let diceSum = 0;
+  for (const roll of (Array.isArray(rolls) ? rolls : [rolls]).filter(Boolean)) {
+    for (const die of roll.dice ?? []) diceSum += die.total ?? 0;
+  }
   if (diceSum <= 0) return;
+
+  // XP = dice rolled, normalised by the weapon's base die so a d12 weapon doesn't grind
+  // faster than a d4, then scaled by the group's DDN.
+  const base = getActivityBaseDie(activity);
+  const bd = base ? base.count * base.size : 0;
+  if (bd <= 0) return;
 
   const xpGain = Math.round(ddn * diceSum / bd);
   if (xpGain <= 0) return;
@@ -279,45 +267,59 @@ export function handleActivityUse(activity, usageConfig, results) {
   const actor = item?.actor;
   if (!actor || actor.type !== "character") return;
 
-  const result = findGroupForItem(item);
-  if (!result) return;
+  const base = getActivityBaseDie(activity);
 
-  const level = getGroupLevel(actor, result.groupId);
-  if (level <= 0) return;
+  // Only react to activities that attack or deal damage — not utility items, features, etc.
+  if (!activityIsAttack(activity) && !activityIsSave(activity) && !base) return;
+
+  const result = findGroupForItem(item);
+  if (!result) {
+    ChatMessage.create({
+      content: `<div class="spire-item-scaling">No weapon group found</div>`,
+      speaker: ChatMessage.getSpeaker({ actor }),
+      whisper: [],
+      flags: { [MODULE_ID]: { type: "scaling-info" } },
+    });
+    return;
+  }
 
   const { group } = result;
+  const level = getGroupLevel(actor, result.groupId);
   const scaling = getGroupScaling(group);
   const milestones = getUnlockedMilestones(group, level);
   const scalingLines = [];
 
-  if (itemHasRange(item) && scaling.range > 0) {
+  // Bonuses for THIS activity (mirror what handlePreAttack / handlePreDamage apply).
+  if (activityIsAttack(activity)) {
+    const toHit = getToHitBonus(level);
+    if (toHit > 0) scalingLines.push(`To Hit: +${toHit}`);
+  }
+  if (base) {
+    const diceMult = getExtraDiceMultiplier(level);
+    if (diceMult > 0) scalingLines.push(`Damage: +${diceMult * base.count}d${base.size}`);
+  }
+  if (activityHasRange(activity) && scaling.range > 0) {
     scalingLines.push(`Range: +${scaling.range * level}ft`);
   }
-  if (itemHasDuration(item) && scaling.duration > 0) {
+  if (activityHasDuration(activity) && scaling.duration > 0) {
     scalingLines.push(`Duration: x${1 + scaling.duration * level}`);
   }
   if (scaling.targets > 0) {
     scalingLines.push(`Extra Targets: +${scaling.targets * level}`);
   }
-  if (itemHasArea(item) && scaling.area > 0) {
+  if (activityHasArea(activity) && scaling.area > 0) {
     scalingLines.push(`Area: +${scaling.area * level}ft`);
   }
-  if (itemHasSave(item)) {
+  if (activityIsSave(activity)) {
     const dcBonus = getSpellSaveDcBonus(level);
-    if (dcBonus > 0) {
-      scalingLines.push(`Save DC: +${dcBonus}`);
-    }
+    if (dcBonus > 0) scalingLines.push(`Save DC: +${dcBonus}`);
   }
 
-  if (scalingLines.length === 0 && milestones.length === 0) return;
-
-  // Build chat message
+  // Always post the group's current info, even with no bonuses yet.
   const parts = [`<div class="spire-item-scaling">`];
   parts.push(`<strong>${group.name}</strong> (Lv ${level})`);
 
-  if (scalingLines.length > 0) {
-    parts.push(`<div class="spire-scaling-bonuses">${scalingLines.join(" | ")}</div>`);
-  }
+  parts.push(`<div class="spire-scaling-bonuses">${scalingLines.length > 0 ? scalingLines.join(" | ") : "No bonuses yet"}</div>`);
 
   if (milestones.length > 0) {
     parts.push(`<ul class="spire-milestones">`);

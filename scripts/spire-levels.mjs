@@ -59,10 +59,20 @@ function applySpirePreBonuses(actor) {
   if (moveBonus > 0 && attrs.movement) {
     attrs.movement.walk = (Number(attrs.movement.walk) || 0) + moveBonus;
   }
+
+  // CON: +1 max HP per 1 point. Inject via dnd5e's own hp.bonuses.overall formula so the
+  // bonus is folded into hp.max during prepareHitPoints (step 4) BEFORE it clamps
+  // hp.value to effectiveMax (dnd5e.mjs:26010). Adding to hp.max in prepareDerivedData
+  // (step 5) is too late — the clamp has already pinned displayed HP to the base max.
+  const hpBonus = bases.con ?? 0;
+  if (hpBonus > 0 && attrs.hp?.bonuses) {
+    const overall = attrs.hp.bonuses.overall;
+    attrs.hp.bonuses.overall = overall ? `${overall} + ${hpBonus}` : String(hpBonus);
+  }
 }
 
-// Called AFTER origPrepare — AC and HP max are fully recomputed by prepareDerivedData,
-// so we must add on top of the finished values rather than trying to pre-set them.
+// Called AFTER origPrepare — AC is fully recomputed by prepareDerivedData, so we add on top
+// of the finished value rather than trying to pre-set it. (HP max is handled in the pre step.)
 function applySpirePostBonuses(actor) {
   if (actor.type !== "character") return;
 
@@ -77,12 +87,8 @@ function applySpirePostBonuses(actor) {
     attrs.ac.value = (attrs.ac.value ?? 0) + acBonus;
   }
 
-  // CON: +1 max HP per 1 point
-  const hpBonus = bases.con ?? 0;
-  if (hpBonus > 0 && attrs.hp) {
-    attrs.hp.max = (attrs.hp.max ?? 0) + hpBonus;
-    attrs.hp.effectiveMax = Math.max(attrs.hp.max + (attrs.hp.tempmax ?? 0), 0);
-  }
+  // CON max-HP bonus is applied in applySpirePreBonuses via hp.bonuses.overall so it is
+  // folded into hp.max before dnd5e clamps hp.value (see note there).
 }
 
 // --- Tab Rendering (native DOM — no jQuery) ---
