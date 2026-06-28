@@ -6,6 +6,10 @@
       {{!-- Group Header --}}
       <div class="group-header">
         <input type="text" class="group-name-input" value="{{this.name}}" placeholder="Group Name">
+        <label class="group-ddn-label" title="Default Damage Number — normalizes XP across weapons with different dice. 0 = no XP gain.">
+          DDN
+          <input type="number" class="group-ddn-input" value="{{this.ddn}}" min="0" step="1">
+        </label>
         <button type="button" class="remove-group" title="Remove Group"><i class="fas fa-trash"></i></button>
       </div>
 

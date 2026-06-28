@@ -1,0 +1,11 @@
+  Things to verify in browser
+
+  Some things I couldn't confirm without a running Foundry instance:
+
+  1. Exact render hook name — is renderCharacterActorSheet correct, or does Foundry v14 use a different pattern? The fallback to renderApplication + class name check should catch it either way.
+  2. Tab nav selectors — .tabs-right .tab-list and #tabs are educated guesses from the dnd5e source. If the tabs don't appear, inspect the sheet DOM and update the selectors.
+  3. Roll config structure — config.rolls[0].parts for adding bonuses needs testing. The config shape may differ.
+  4. AC bonus path — attrs.ac.bonus may have changed in dnd5e 5.x.
+  5. D20 dialog injection — the button capture approach may need adjustment depending on how _finalizeRolls actually processes the action.
+
+  I'd recommend loading it in Foundry with the browser console open and checking for "The Spire |" log messages to see what's firing and what isn't.

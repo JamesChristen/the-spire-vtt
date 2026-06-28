@@ -4,8 +4,8 @@
   "description": "Custom level scaling and dice rolling mechanics for D&D 5e.",
   "version": "0.1.0",
   "compatibility": {
-    "minimum": "11",
-    "verified": "12"
+    "minimum": "14",
+    "verified": "14"
   },
   "relationships": {
     "systems": [
@@ -13,7 +13,7 @@
         "id": "dnd5e",
         "type": "system",
         "compatibility": {
-          "minimum": "3.0.0"
+          "minimum": "5.0.0"
         }
       }
     ]
@@ -35,5 +35,7 @@
       "name": "English",
       "path": "languages/en.json"
     }
-  ]
+  ],
+  "download": "https://github.com/JamesChristen/the-spire-vtt/archive/refs/tags/Latest.zip",
+  "manifest": "https://raw.githubusercontent.com/JamesChristen/the-spire-vtt/master/module.json"
 }

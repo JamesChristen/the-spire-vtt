@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep -l \"prepareDerivedData\\\\|prepareBaseData\")",
+      "Bash(awk -F: '$1+0 >= 35921 && $1+0 <= 37000')",
+      "Bash(xargs grep -l \"class.*Actor.*extends\\\\|prepareDerivedData\\(\\)\")"
+    ]
+  }
+}

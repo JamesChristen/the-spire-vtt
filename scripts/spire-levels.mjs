@@ -4,9 +4,6 @@ const MODULE_ID = "the-spire";
 const ABILITIES = ["str", "dex", "con", "int", "wis", "cha"];
 const ABILITY_LABELS = { str: "STR", dex: "DEX", con: "CON", int: "INT", wis: "WIS", cha: "CHA" };
 
-// Track which sheet had the spire tab active so we can restore it after re-render
-const _activeSpireSheets = new Set();
-
 // --- Helpers ---
 
 function getSpireData(actor) {
@@ -37,7 +34,10 @@ function getSpirePerks(bases) {
 
 // --- Stat Modifications ---
 
-function applySpireStatBonuses(actor) {
+// Called from a prepareBaseData wrapper so values land before system.prepareDerivedData()
+// runs prepareAbilities (which computes .mod from .value). Hooking prepareDerivedData was
+// too late — Foundry runs system.prepareDerivedData *before* Actor.prepareDerivedData.
+function applySpirePreBonuses(actor) {
   if (actor.type !== "character") return;
 
   const bases = actor.getFlag(MODULE_ID, "bases");
@@ -46,7 +46,7 @@ function applySpireStatBonuses(actor) {
   const abilities = actor.system.abilities;
   const attrs = actor.system.attributes;
 
-  // Modify base ability scores — cascades to modifiers, saves, skills
+  // Ability scores — cascade to modifiers, saves, skills
   for (const ability of ABILITIES) {
     const scoreBonus = getBonus(bases[ability] ?? 0);
     if (scoreBonus > 0 && abilities[ability]) {
@@ -54,26 +54,40 @@ function applySpireStatBonuses(actor) {
     }
   }
 
-  // STR: +5ft movement per 5 points
+  // STR: +5ft movement per 5 points — movement.walk is a base value prepareDerivedData adds to
   const moveBonus = getBonus(bases.str ?? 0) * 5;
   if (moveBonus > 0 && attrs.movement) {
-    attrs.movement.walk = (attrs.movement.walk ?? 0) + moveBonus;
+    attrs.movement.walk = (Number(attrs.movement.walk) || 0) + moveBonus;
   }
+}
+
+// Called AFTER origPrepare — AC and HP max are fully recomputed by prepareDerivedData,
+// so we must add on top of the finished values rather than trying to pre-set them.
+function applySpirePostBonuses(actor) {
+  if (actor.type !== "character") return;
+
+  const bases = actor.getFlag(MODULE_ID, "bases");
+  if (!bases) return;
+
+  const attrs = actor.system.attributes;
 
   // DEX: +1 AC per 5 points
   const acBonus = getBonus(bases.dex ?? 0);
   if (acBonus > 0 && attrs.ac) {
-    attrs.ac.bonus = (attrs.ac.bonus ?? 0) + acBonus;
+    attrs.ac.value = (attrs.ac.value ?? 0) + acBonus;
   }
 
   // CON: +1 max HP per 1 point
   const hpBonus = bases.con ?? 0;
   if (hpBonus > 0 && attrs.hp) {
     attrs.hp.max = (attrs.hp.max ?? 0) + hpBonus;
+    attrs.hp.effectiveMax = Math.max(attrs.hp.max + (attrs.hp.tempmax ?? 0), 0);
   }
 }
 
-// --- Tab Rendering ---
+// --- Tab Rendering (native DOM — no jQuery) ---
+// Note: innerHTML usage below is safe — all interpolated values are module-controlled
+// (ability labels, numeric values). No user-supplied content is injected.
 
 function getUnmodifiedScores(actor) {
   const bases = actor.getFlag(MODULE_ID, "bases") ?? { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 };
@@ -86,116 +100,252 @@ function getUnmodifiedScores(actor) {
   return scores;
 }
 
+function buildStatRow(ability, bases, unallocated, perks, originalScores, isOwner) {
+  const value = bases[ability] ?? 0;
+  const bonus = getBonus(value);
+  const perk = perks[ability];
+  const original = originalScores[ability];
+  const minusDisabled = !isOwner || value <= 0;
+  const plusHidden = unallocated < 0;
+  const plusDisabled = !isOwner || unallocated <= 0;
+
+  const row = document.createElement("div");
+  row.className = "spire-stat";
+  row.dataset.ability = ability;
+
+  const label = document.createElement("span");
+  label.className = "spire-stat-label";
+  label.textContent = ABILITY_LABELS[ability];
+
+  const orig = document.createElement("span");
+  orig.className = "spire-stat-original";
+  orig.title = "Base score without Spire";
+  orig.textContent = String(original);
+
+  const minusBtn = document.createElement("button");
+  minusBtn.type = "button";
+  minusBtn.className = "spire-stat-minus";
+  minusBtn.title = "Remove point";
+  minusBtn.textContent = "-";
+  if (minusDisabled) minusBtn.disabled = true;
+
+
+  const valSpan = document.createElement("span");
+  valSpan.className = "spire-stat-value";
+  valSpan.textContent = String(value);
+
+  const plusBtn = document.createElement("button");
+  plusBtn.type = "button";
+  plusBtn.className = "spire-stat-plus";
+  plusBtn.title = "Add point";
+  plusBtn.textContent = "+";
+  if (plusHidden) plusBtn.style.display = "none";
+  else if (plusDisabled) plusBtn.disabled = true;
+
+  const effectSpan = document.createElement("span");
+  effectSpan.className = "spire-stat-effect";
+  effectSpan.textContent = `(${formatBonus(bonus)}) ${perk.label}: ${perk.value}`;
+
+  row.append(label, orig, minusBtn, valSpan, plusBtn, effectSpan);
+  return row;
+}
+
 function buildSpireLevelContent(actor) {
   const { spireLevel, bases, unallocated } = getSpireData(actor);
   const isOwner = actor.isOwner;
   const perks = getSpirePerks(bases);
   const originalScores = getUnmodifiedScores(actor);
 
-  const statRows = ABILITIES.map(ability => {
-    const value = bases[ability] ?? 0;
-    const bonus = getBonus(value);
-    const perk = perks[ability];
-    const original = originalScores[ability];
-    const minusDisabled = !isOwner || value <= 0 ? "disabled" : "";
-    const plusDisabled = !isOwner || unallocated <= 0 ? "disabled" : "";
+  const container = document.createDocumentFragment();
 
-    return `
-      <div class="spire-stat" data-ability="${ability}">
-        <span class="spire-stat-label">${ABILITY_LABELS[ability]}</span>
-        <span class="spire-stat-original" title="Base score without Spire">${original}</span>
-        <button class="spire-stat-minus" ${minusDisabled} title="Remove point">-</button>
-        <span class="spire-stat-value">${value}</span>
-        <button class="spire-stat-plus" ${plusDisabled} title="Add point">+</button>
-        <span class="spire-stat-bonus">(${formatBonus(bonus)})</span>
-        <span class="spire-stat-perk">${perk.label}: ${perk.value}</span>
-      </div>`;
-  }).join("");
+  // Header section
+  const header = document.createElement("section");
+  header.className = "spire-header";
 
-  const levelUpButton = isOwner
-    ? `<button class="spire-level-up" title="Gain 1 Spire Level">+1</button>`
-    : "";
+  const levelDiv = document.createElement("div");
+  levelDiv.className = "spire-level";
 
-  return `
-    <section class="spire-header">
-      <div class="spire-level">
-        <h3>Spire Level: <span class="spire-level-value">${spireLevel}</span></h3>
-        ${levelUpButton}
-      </div>
-      <div class="spire-points">
-        <span>Unallocated Points: <strong class="spire-unallocated">${unallocated}</strong></span>
-      </div>
-    </section>
-    <section class="spire-stats">
-      ${statRows}
-    </section>`;
+  const h3 = document.createElement("h3");
+  h3.textContent = "Spire Level: ";
+  const levelValue = document.createElement("span");
+  levelValue.className = "spire-level-value";
+  levelValue.textContent = String(spireLevel);
+  h3.appendChild(levelValue);
+  levelDiv.appendChild(h3);
+
+  if (isOwner) {
+    const levelDownBtn = document.createElement("button");
+    levelDownBtn.type = "button";
+    levelDownBtn.className = "spire-level-down";
+    levelDownBtn.title = "Lose 1 Spire Level";
+    levelDownBtn.textContent = "-1";
+    if (spireLevel <= 0) levelDownBtn.disabled = true;
+
+    const levelUpBtn = document.createElement("button");
+    levelUpBtn.type = "button";
+    levelUpBtn.className = "spire-level-up";
+    levelUpBtn.title = "Gain 1 Spire Level";
+    levelUpBtn.textContent = "+1";
+
+    levelDiv.append(levelDownBtn, levelUpBtn);
+  }
+  header.appendChild(levelDiv);
+
+  const pointsDiv = document.createElement("div");
+  pointsDiv.className = "spire-points";
+  const pointsSpan = document.createElement("span");
+  pointsSpan.textContent = "Unallocated Points: ";
+  const unallocSpan = document.createElement("strong");
+  unallocSpan.className = "spire-unallocated";
+  unallocSpan.textContent = String(unallocated);
+  pointsSpan.appendChild(unallocSpan);
+  pointsDiv.appendChild(pointsSpan);
+  header.appendChild(pointsDiv);
+  container.appendChild(header);
+
+  // Stat rows
+  const statsSection = document.createElement("section");
+  statsSection.className = "spire-stats";
+  for (const ability of ABILITIES) {
+    statsSection.appendChild(buildStatRow(ability, bases, unallocated, perks, originalScores, isOwner));
+  }
+  container.appendChild(statsSection);
+
+  return container;
+}
+
+// --- Rest Handling ---
+
+export async function handleRestCompleted(actor, result) {
+  if (!result?.longRest) return;
+  if (actor?.type !== "character") return;
+  const hp = actor.system.attributes?.hp;
+  if (!hp || hp.max == null) return;
+  if (hp.value >= hp.max) return;
+  await actor.update({ "system.attributes.hp.value": hp.max });
 }
 
 // --- Exports ---
 
 export function initSpireLevels() {
   const ActorClass = CONFIG.Actor.documentClass;
-  const origPrepare = ActorClass.prototype.prepareDerivedData;
+
+  const origBase = ActorClass.prototype.prepareBaseData;
+  ActorClass.prototype.prepareBaseData = function () {
+    origBase.call(this);
+    applySpirePreBonuses(this);
+  };
+
+  const origDerived = ActorClass.prototype.prepareDerivedData;
   ActorClass.prototype.prepareDerivedData = function () {
-    origPrepare.call(this);
-    applySpireStatBonuses(this);
+    origDerived.call(this);
+    applySpirePostBonuses(this);
   };
 }
 
-export function renderSpireLevelTab(app, html) {
+export function renderSpireLevelTab(app, element) {
   const actor = app.actor;
 
-  // Inject tab nav item
-  const tabs = html.find('.tabs[data-group="primary"]');
-  tabs.append(`<a class="item" data-tab="spire"><i class="fa-solid fa-tower-observation"></i> Spire</a>`);
+  // Find the tab navigation — dnd5e 5.x renders a <nav class="tabs" data-group="primary"> via sidebar-tabs.hbs
+  const tabNav = element.querySelector('nav.tabs[data-group="primary"]')
+    ?? element.querySelector(".tabs-right .tab-list")
+    ?? element.querySelector('[role="tablist"]')
+    ?? element.querySelector(".sheet-tabs");
 
-  // Inject tab with spire-level content (weapon groups section appended separately)
-  const tabDiv = $(`<div class="tab spire" data-group="primary" data-tab="spire"></div>`);
-  tabDiv.append(buildSpireLevelContent(actor));
-  html.find(".sheet-body").append(tabDiv);
-
-  // Restore tab selection if it was active before re-render
-  if (_activeSpireSheets.has(app.appId)) {
-    app._tabs[0]?.activate("spire");
+  if (!tabNav) {
+    console.warn("The Spire | Could not find tab navigation in character sheet");
+    return;
   }
 
-  // Track tab selection
-  html.find('.tabs[data-group="primary"] .item').on("click", (event) => {
-    const tab = event.currentTarget.dataset.tab;
-    if (tab === "spire") {
-      _activeSpireSheets.add(app.appId);
-    } else {
-      _activeSpireSheets.delete(app.appId);
-    }
-  });
+  // Only skip if our nav button is already present.
+  // A partial re-render can remove the nav button while leaving the panel behind —
+  // in that case we fall through, clean up the orphaned panel, and re-inject both.
+  if (tabNav.querySelector('[data-tab="spire"]')) return;
+  element.querySelector('.tab[data-tab="spire"]')?.remove();
 
-  // Event handlers (owner only)
+  // Add tab button — match dnd5e 5.x's <a class="item control" data-action="tab"> pattern
+  const tabButton = document.createElement("a");
+  tabButton.className = "item control";
+  tabButton.dataset.action = "tab";
+  tabButton.dataset.tab = "spire";
+  tabButton.dataset.group = "primary";
+
+  const tabIcon = document.createElement("i");
+  tabIcon.className = "fa-solid fa-tower-observation";
+  tabButton.appendChild(tabIcon);
+  tabNav.appendChild(tabButton);
+
+  // Find the tab content container
+  const tabBody = element.querySelector("#tabs")
+    ?? element.querySelector(".tab-body")
+    ?? element.querySelector(".sheet-body");
+
+  if (!tabBody) {
+    console.warn("The Spire | Could not find tab body container");
+    return;
+  }
+
+  // Create the spire tab content
+  const tabContent = document.createElement("div");
+  tabContent.className = "tab spire";
+  tabContent.dataset.group = "primary";
+  tabContent.dataset.tab = "spire";
+  tabContent.setAttribute("role", "tabpanel");
+  tabContent.appendChild(buildSpireLevelContent(actor));
+  tabBody.appendChild(tabContent);
+
+  // Restore active state if this tab was active before the re-render
+  if (app.tabGroups?.primary === "spire") {
+    tabButton.classList.add("active");
+    tabContent.classList.add("active");
+  }
+
+  // Tab switching is handled by data-action="tab" — Foundry's changeTab toggles .active on nav + panels
+
+  // Wire up interactive buttons (owner only), rebuilding content after each change
   if (!actor.isOwner) return;
-
-  html.find(".spire-level-up").on("click", async () => {
-    const current = actor.getFlag(MODULE_ID, "spireLevel") ?? 0;
-    await actor.setFlag(MODULE_ID, "spireLevel", current + 1);
-  });
-
-  html.find(".spire-stat-plus").on("click", async (event) => {
-    const { spireLevel, bases } = getSpireData(actor);
-    const allocated = Object.values(bases).reduce((sum, v) => sum + v, 0);
-    if (allocated >= spireLevel) return;
-    const ability = $(event.currentTarget).closest(".spire-stat").data("ability");
-    const current = bases[ability] ?? 0;
-    await actor.setFlag(MODULE_ID, `bases.${ability}`, current + 1);
-  });
-
-  html.find(".spire-stat-minus").on("click", async (event) => {
-    const ability = $(event.currentTarget).closest(".spire-stat").data("ability");
-    const bases = actor.getFlag(MODULE_ID, "bases") ?? {};
-    const current = bases[ability] ?? 0;
-    if (current <= 0) return;
-    await actor.setFlag(MODULE_ID, `bases.${ability}`, current - 1);
-  });
+  wireSpireButtons(actor, tabContent);
 }
 
-// Clean up tracking when sheet is closed
-Hooks.on("closeActorSheet", (app) => {
-  _activeSpireSheets.delete(app.appId);
-});
+function wireSpireButtons(actor, tabContent) {
+  function refresh() {
+    tabContent.replaceChildren(buildSpireLevelContent(actor));
+    wireSpireButtons(actor, tabContent);
+  }
+
+  tabContent.querySelector(".spire-level-down")?.addEventListener("click", async () => {
+    const current = actor.getFlag(MODULE_ID, "spireLevel") ?? 0;
+    if (current <= 0) return;
+    await actor.setFlag(MODULE_ID, "spireLevel", current - 1);
+    refresh();
+  });
+
+  tabContent.querySelector(".spire-level-up")?.addEventListener("click", async () => {
+    const current = actor.getFlag(MODULE_ID, "spireLevel") ?? 0;
+    await actor.setFlag(MODULE_ID, "spireLevel", current + 1);
+    refresh();
+  });
+
+  tabContent.querySelectorAll(".spire-stat-plus").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const { spireLevel, bases } = getSpireData(actor);
+      const allocated = Object.values(bases).reduce((sum, v) => sum + v, 0);
+      if (allocated >= spireLevel) return;
+      const ability = btn.closest(".spire-stat").dataset.ability;
+      const current = bases[ability] ?? 0;
+      await actor.setFlag(MODULE_ID, `bases.${ability}`, current + 1);
+      refresh();
+    });
+  });
+
+  tabContent.querySelectorAll(".spire-stat-minus").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const ability = btn.closest(".spire-stat").dataset.ability;
+      const bases = actor.getFlag(MODULE_ID, "bases") ?? {};
+      const current = bases[ability] ?? 0;
+      if (current <= 0) return;
+      await actor.setFlag(MODULE_ID, `bases.${ability}`, current - 1);
+      refresh();
+    });
+  });
+}

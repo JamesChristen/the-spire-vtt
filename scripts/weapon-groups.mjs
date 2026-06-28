@@ -6,10 +6,10 @@ const MODULE_ID = "the-spire";
 
 // Default scaling rates per level (GM can override per group)
 const DEFAULT_SCALING = {
-  range: 0,      // ft per level
-  duration: 0,   // multiplier per level (0 = disabled)
-  targets: 0,    // extra targets per level
-  area: 0,       // ft per level
+  range: 0,
+  duration: 0,
+  targets: 0,
+  area: 0,
 };
 
 // --- Data Helpers ---
@@ -29,9 +29,30 @@ function findGroupForItem(item) {
   return null;
 }
 
+// Incremental XP cost to advance from `level` to `level + 1`, given the group's DDN.
+function levelUpCost(level, ddn) {
+  return Math.ceil(ddn * Math.pow(level + 1, 1 + 0.1 * level));
+}
+
+// Resolve current level from total XP by walking incremental costs.
+// ddn <= 0 means the group is unconfigured — stays at level 0.
+function levelFromXp(xp, ddn) {
+  if (!ddn || ddn <= 0) return 0;
+  let level = 0;
+  let cumulative = 0;
+  while (level < 100) {
+    const cost = levelUpCost(level, ddn);
+    if (cumulative + cost > xp) break;
+    cumulative += cost;
+    level++;
+  }
+  return level;
+}
+
 function getGroupLevel(actor, groupId) {
   const xp = actor.getFlag(MODULE_ID, "groupXp")?.[groupId] ?? 0;
-  return Math.floor(xp / 10);
+  const ddn = getGroups()[groupId]?.ddn ?? 0;
+  return levelFromXp(xp, ddn);
 }
 
 function getToHitBonus(level) {
@@ -47,22 +68,55 @@ function getExtraDiceMultiplier(level) {
 }
 
 function getBaseDice(item) {
+  // dnd5e 5.x: damage parts may be structured differently via Activities
+  // Try the activity-based damage first, then fall back to legacy
+  const activities = item.system?.activities;
+  if (activities) {
+    for (const activity of activities) {
+      const parts = activity?.damage?.parts;
+      if (parts?.length > 0) {
+        const formula = parts[0]?.formula ?? parts[0]?.[0] ?? "";
+        const match = formula.match(/(\d+)d(\d+)/);
+        if (match) return { count: parseInt(match[1]), size: parseInt(match[2]), full: match[0] };
+      }
+    }
+  }
+  // Legacy fallback
   const formula = item.system?.damage?.parts?.[0]?.[0] ?? "";
   const match = formula.match(/(\d+)d(\d+)/);
   if (!match) return null;
   return { count: parseInt(match[1]), size: parseInt(match[2]), full: match[0] };
 }
 
-// Check what capabilities an item has
 function itemHasAttack(item) {
+  // dnd5e 5.x: check activities for attack type
+  const activities = item.system?.activities;
+  if (activities) {
+    for (const activity of activities) {
+      if (activity?.type === "attack") return true;
+    }
+  }
+  // Legacy fallback
   return !!item.system?.actionType && ["mwak", "rwak", "msak", "rsak"].includes(item.system.actionType);
 }
 
 function itemHasDamage(item) {
+  const activities = item.system?.activities;
+  if (activities) {
+    for (const activity of activities) {
+      if (activity?.damage?.parts?.length > 0) return true;
+    }
+  }
   return item.system?.damage?.parts?.length > 0;
 }
 
 function itemHasSave(item) {
+  const activities = item.system?.activities;
+  if (activities) {
+    for (const activity of activities) {
+      if (activity?.type === "save") return true;
+    }
+  }
   return !!item.system?.save?.ability;
 }
 
@@ -78,12 +132,10 @@ function itemHasArea(item) {
   return (item.system?.target?.value ?? 0) > 0 && !!item.system?.target?.type;
 }
 
-// Get scaling params for a group (merge defaults with GM overrides)
 function getGroupScaling(group) {
   return { ...DEFAULT_SCALING, ...(group.scaling ?? {}) };
 }
 
-// Get milestones unlocked at or below the given level
 function getUnlockedMilestones(group, level) {
   if (!group.milestones || !Array.isArray(group.milestones)) return [];
   return group.milestones
@@ -111,10 +163,16 @@ export function initWeaponGroups() {
   });
 }
 
-// --- Roll Hook Handlers ---
+// --- Roll Hook Handlers (dnd5e 5.x signatures) ---
 
-export function handlePreAttack(item, config) {
-  const actor = item.actor;
+/**
+ * dnd5e.preRollAttack — new signature: (config, dialogConfig, messageConfig)
+ * config.subject is the Activity, config.rolls contains roll configurations
+ */
+export function handlePreAttack(config, dialogConfig, messageConfig) {
+  const activity = config.subject;
+  const item = activity?.item;
+  const actor = item?.actor;
   if (!actor || actor.type !== "character") return;
   if (!itemHasAttack(item)) return;
 
@@ -125,17 +183,24 @@ export function handlePreAttack(item, config) {
   const bonus = getToHitBonus(level);
   if (bonus <= 0) return;
 
-  if (Array.isArray(config.parts)) {
-    config.parts.push(bonus.toString());
-  } else if (config.bonus !== undefined) {
-    config.bonus = config.bonus ? `${config.bonus} + ${bonus}` : bonus.toString();
-  } else {
-    config.bonus = bonus.toString();
+  // preRollAttack fires before _buildAttackConfig populates parts/data — initialize
+  // parts ourselves so our bonus is preserved when the attack parts are appended later.
+  if (!config.rolls?.length) return;
+  for (const roll of config.rolls) {
+    roll.parts ??= [];
+    roll.data ??= {};
+    roll.parts.push("@spireBonus");
+    roll.data.spireBonus = bonus;
   }
 }
 
-export function handlePreDamage(item, config) {
-  const actor = item.actor;
+/**
+ * dnd5e.preRollDamage — new signature: (config, dialogConfig, messageConfig)
+ */
+export function handlePreDamage(config, dialogConfig, messageConfig) {
+  const activity = config.subject;
+  const item = activity?.item;
+  const actor = item?.actor;
   if (!actor || actor.type !== "character") return;
   if (!itemHasDamage(item)) return;
 
@@ -151,31 +216,67 @@ export function handlePreDamage(item, config) {
 
   const extraDice = `${multiplier * baseDice.count}d${baseDice.size}`;
 
-  if (Array.isArray(config.parts)) {
-    const damageType = item.system?.damage?.parts?.[0]?.[1] ?? "";
-    config.parts.push([extraDice, damageType]);
+  if (!config.rolls?.length) return;
+  for (const roll of config.rolls) {
+    roll.parts ??= [];
+    roll.parts.push(extraDice);
   }
 }
 
-export function handleDamageRoll(item, roll) {
-  const actor = item.actor;
+/**
+ * dnd5e.rollDamage — new signature: (rolls, data)
+ * rolls: DamageRoll[], data.subject: Activity
+ */
+export function handleDamageRoll(rolls, data) {
+  const activity = data?.subject;
+  const item = activity?.item;
+  const actor = item?.actor;
   if (!actor || actor.type !== "character") return;
   if (!itemHasDamage(item)) return;
 
   const result = findGroupForItem(item);
   if (!result) return;
 
-  const damage = roll.total ?? 0;
-  if (damage <= 0) return;
+  const ddn = result.group.ddn ?? 0;
+  if (ddn <= 0) return;
+
+  const baseDice = getBaseDice(item);
+  if (!baseDice) return;
+  const bd = baseDice.count * baseDice.size;
+  if (bd <= 0) return;
+
+  // Sum only the rolled dice (exclude flat modifiers like ability mod/bonuses).
+  const diceSum = (Array.isArray(rolls) ? rolls : [rolls])
+    .filter(Boolean)
+    .reduce((sum, r) => sum + (r.dice ?? []).reduce((s, d) => s + (d.total ?? 0), 0), 0);
+  if (diceSum <= 0) return;
+
+  const xpGain = Math.round(ddn * diceSum / bd);
+  if (xpGain <= 0) return;
 
   const currentXp = actor.getFlag(MODULE_ID, "groupXp")?.[result.groupId] ?? 0;
-  actor.setFlag(MODULE_ID, `groupXp.${result.groupId}`, currentXp + damage);
+  const newXp = currentXp + xpGain;
+  const oldLevel = levelFromXp(currentXp, ddn);
+  const newLevel = levelFromXp(newXp, ddn);
+  actor.setFlag(MODULE_ID, `groupXp.${result.groupId}`, newXp);
+
+  if (newLevel > oldLevel) {
+    ChatMessage.create({
+      content: `<div class="spire-levelup">Congratulations <strong>${actor.name}</strong>! You have reached level <strong>${newLevel}</strong> in <strong>${result.group.name}</strong></div>`,
+      speaker: ChatMessage.getSpeaker({ actor }),
+    });
+  }
 }
 
-// --- Item Use Hook (milestones + scaling display in chat) ---
+// --- Activity Use Hook (milestones + scaling display in chat) ---
 
-export function handleItemUse(item) {
-  const actor = item.actor;
+/**
+ * dnd5e.postUseActivity — replaces dnd5e.useItem
+ * (activity, usageConfig, results)
+ */
+export function handleActivityUse(activity, usageConfig, results) {
+  const item = activity?.item;
+  const actor = item?.actor;
   if (!actor || actor.type !== "character") return;
 
   const result = findGroupForItem(item);
@@ -189,7 +290,6 @@ export function handleItemUse(item) {
   const milestones = getUnlockedMilestones(group, level);
   const scalingLines = [];
 
-  // Only show scaling for properties the item actually has
   if (itemHasRange(item) && scaling.range > 0) {
     scalingLines.push(`Range: +${scaling.range * level}ft`);
   }
@@ -209,52 +309,60 @@ export function handleItemUse(item) {
     }
   }
 
-  // Nothing to display
   if (scalingLines.length === 0 && milestones.length === 0) return;
 
-  // Build chat message content
-  let content = `<div class="spire-item-scaling">`;
-  content += `<strong>${group.name}</strong> (Lv ${level})`;
+  // Build chat message
+  const parts = [`<div class="spire-item-scaling">`];
+  parts.push(`<strong>${group.name}</strong> (Lv ${level})`);
 
   if (scalingLines.length > 0) {
-    content += `<div class="spire-scaling-bonuses">${scalingLines.join(" | ")}</div>`;
+    parts.push(`<div class="spire-scaling-bonuses">${scalingLines.join(" | ")}</div>`);
   }
 
   if (milestones.length > 0) {
-    content += `<ul class="spire-milestones">`;
+    parts.push(`<ul class="spire-milestones">`);
     for (const m of milestones) {
-      content += `<li><strong>Lv ${m.level}:</strong> ${m.text}</li>`;
+      parts.push(`<li><strong>Lv ${m.level}:</strong> ${m.text}</li>`);
     }
-    content += `</ul>`;
+    parts.push(`</ul>`);
   }
 
-  content += `</div>`;
+  parts.push(`</div>`);
 
-  // Post as a chat message
   ChatMessage.create({
-    content,
+    content: parts.join(""),
     speaker: ChatMessage.getSpeaker({ actor }),
-    whisper: [], // visible to all
+    whisper: [],
     flags: { [MODULE_ID]: { type: "scaling-info" } },
   });
 }
 
-// --- Character Sheet Display ---
+// --- Character Sheet Display (native DOM) ---
 
-export function renderWeaponGroupsSection(app, html) {
+export function renderWeaponGroupsSection(app, element) {
   const actor = app.actor;
   const groups = getGroups();
   const groupEntries = Object.entries(groups);
 
-  // Don't render if no groups defined
   if (groupEntries.length === 0) return;
 
   const groupXp = actor.getFlag(MODULE_ID, "groupXp") ?? {};
   const isGM = game.user.isGM;
 
-  const groupRows = groupEntries.map(([groupId, group]) => {
+  // Find or create the spire tab content area
+  const spireTab = element.querySelector('.tab.spire, [data-tab="spire"]');
+  if (!spireTab) return;
+
+  const section = document.createElement("section");
+  section.className = "spire-weapon-groups";
+
+  const h3 = document.createElement("h3");
+  h3.textContent = "Weapon Groups";
+  section.appendChild(h3);
+
+  for (const [groupId, group] of groupEntries) {
     const xp = groupXp[groupId] ?? 0;
-    const level = Math.floor(xp / 10);
+    const level = levelFromXp(xp, group.ddn ?? 0);
     const toHit = getToHitBonus(level);
     const extraDice = getExtraDiceMultiplier(level);
     const spellDc = getSpellSaveDcBonus(level);
@@ -262,11 +370,55 @@ export function renderWeaponGroupsSection(app, html) {
     const milestones = getUnlockedMilestones(group, level);
     const itemList = group.items?.map(i => i.name).join(", ") || "No items";
 
-    const xpField = isGM
-      ? `<input type="number" class="group-xp-input" data-group-id="${groupId}" value="${xp}" min="0" title="Adjust XP">`
-      : `<span class="group-xp-value">${xp}</span>`;
+    const groupDiv = document.createElement("div");
+    groupDiv.className = "spire-weapon-group";
+    groupDiv.dataset.groupId = groupId;
 
-    // Build scaling summary
+    // Main row
+    const mainRow = document.createElement("div");
+    mainRow.className = "group-row-main";
+
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "group-name";
+    nameSpan.textContent = group.name;
+
+    const levelSpan = document.createElement("span");
+    levelSpan.className = "group-level";
+    levelSpan.textContent = `Lv ${level}`;
+
+    mainRow.append(nameSpan, levelSpan);
+
+    if (isGM) {
+      const xpInput = document.createElement("input");
+      xpInput.type = "number";
+      xpInput.className = "group-xp-input";
+      xpInput.dataset.groupId = groupId;
+      xpInput.value = String(xp);
+      xpInput.min = "0";
+      xpInput.title = "Adjust XP";
+      xpInput.addEventListener("change", async (event) => {
+        const newXp = Math.max(0, parseInt(event.currentTarget.value) || 0);
+        await actor.setFlag(MODULE_ID, `groupXp.${groupId}`, newXp);
+      });
+      mainRow.appendChild(xpInput);
+    } else {
+      const xpValue = document.createElement("span");
+      xpValue.className = "group-xp-value";
+      xpValue.textContent = String(xp);
+      mainRow.appendChild(xpValue);
+    }
+
+    const xpLabel = document.createElement("span");
+    xpLabel.className = "group-xp-label";
+    xpLabel.textContent = "XP";
+    mainRow.appendChild(xpLabel);
+
+    groupDiv.appendChild(mainRow);
+
+    // Detail row
+    const detailRow = document.createElement("div");
+    detailRow.className = "group-row-detail";
+
     const scalingParts = [];
     if (toHit > 0) scalingParts.push(`+${toHit} hit`);
     if (extraDice > 0) scalingParts.push(`+${extraDice} dice`);
@@ -276,47 +428,35 @@ export function renderWeaponGroupsSection(app, html) {
     if (scaling.targets > 0) scalingParts.push(`+${scaling.targets * level} targets`);
     if (scaling.duration > 0) scalingParts.push(`x${1 + scaling.duration * level} duration`);
 
-    const bonusesText = scalingParts.length > 0 ? scalingParts.join(" | ") : "No bonuses yet";
+    const bonusesSpan = document.createElement("span");
+    bonusesSpan.className = "group-bonuses";
+    bonusesSpan.textContent = scalingParts.length > 0 ? scalingParts.join(" | ") : "No bonuses yet";
 
-    // Milestones display
-    let milestonesHtml = "";
+    const itemsSpan = document.createElement("span");
+    itemsSpan.className = "group-items";
+    itemsSpan.title = itemList;
+    itemsSpan.textContent = itemList;
+
+    detailRow.append(bonusesSpan, itemsSpan);
+    groupDiv.appendChild(detailRow);
+
+    // Milestones
     if (milestones.length > 0) {
-      milestonesHtml = `<ul class="group-milestones">` +
-        milestones.map(m => `<li><strong>Lv ${m.level}:</strong> ${m.text}</li>`).join("") +
-        `</ul>`;
+      const milestoneList = document.createElement("ul");
+      milestoneList.className = "group-milestones";
+      for (const m of milestones) {
+        const li = document.createElement("li");
+        const strong = document.createElement("strong");
+        strong.textContent = `Lv ${m.level}: `;
+        li.appendChild(strong);
+        li.append(m.text);
+        milestoneList.appendChild(li);
+      }
+      groupDiv.appendChild(milestoneList);
     }
 
-    return `
-      <div class="spire-weapon-group" data-group-id="${groupId}">
-        <div class="group-row-main">
-          <span class="group-name">${group.name}</span>
-          <span class="group-level">Lv ${level}</span>
-          ${xpField}
-          <span class="group-xp-label">XP</span>
-        </div>
-        <div class="group-row-detail">
-          <span class="group-bonuses">${bonusesText}</span>
-          <span class="group-items" title="${itemList}">${itemList}</span>
-        </div>
-        ${milestonesHtml}
-      </div>`;
-  }).join("");
-
-  const section = $(`
-    <section class="spire-weapon-groups">
-      <h3>Weapon Groups</h3>
-      ${groupRows}
-    </section>`);
-
-  // Append to the spire tab
-  html.find(".tab.spire").append(section);
-
-  // GM manual XP adjustment
-  if (isGM) {
-    html.find(".group-xp-input").on("change", async (event) => {
-      const groupId = $(event.currentTarget).data("group-id");
-      const newXp = Math.max(0, parseInt(event.currentTarget.value) || 0);
-      await actor.setFlag(MODULE_ID, `groupXp.${groupId}`, newXp);
-    });
+    section.appendChild(groupDiv);
   }
+
+  spireTab.appendChild(section);
 }

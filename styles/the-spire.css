@@ -1,27 +1,34 @@
 /* The Spire - Module Styles */
 
-.dnd5e .tab.spire {
-  padding: 0.5rem 1rem;
+.dnd5e2 .tab.spire {
+  padding: 0.5rem 0.5rem;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+.dnd5e2 .tab.spire * {
+  box-sizing: border-box;
 }
 
 /* Header: level + unallocated */
-.dnd5e .spire-header {
+.dnd5e2 .spire-header {
   margin-bottom: 1rem;
 }
 
-.dnd5e .spire-level {
+.dnd5e2 .spire-level {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   margin-bottom: 0.25rem;
 }
 
-.dnd5e .spire-level h3 {
+.dnd5e2 .spire-level h3 {
   margin: 0;
   border: none;
 }
 
-.dnd5e .spire-level-up {
+.dnd5e2 .spire-level-down,
+.dnd5e2 .spire-level-up {
   width: 2rem;
   height: 2rem;
   font-weight: bold;
@@ -29,47 +36,49 @@
   cursor: pointer;
 }
 
-.dnd5e .spire-points {
+.dnd5e2 .spire-points {
   font-size: 0.875rem;
   color: #4b4a44;
 }
 
-.dnd5e .spire-unallocated {
+.dnd5e2 .spire-unallocated {
   color: #18520b;
 }
 
 /* Stat grid */
-.dnd5e .spire-stats {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
+.dnd5e2 .spire-stats {
+  display: flex;
+  flex-direction: column;
   gap: 0.5rem;
 }
 
-.dnd5e .spire-stat {
+.dnd5e2 .spire-stat {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem;
   padding: 0.35rem 0.5rem;
   border: 1px solid #7a7971;
   border-radius: 3px;
   background: rgba(0, 0, 0, 0.03);
+  min-width: 0;
 }
 
-.dnd5e .spire-stat-label {
+.dnd5e2 .spire-stat-label {
   font-weight: bold;
   width: 2.5rem;
   text-transform: uppercase;
   font-size: 0.8rem;
 }
 
-.dnd5e .spire-stat-original {
+.dnd5e2 .spire-stat-original {
   width: 1.5rem;
   text-align: center;
   font-size: 0.75rem;
   color: #7a7971;
 }
 
-.dnd5e .spire-stat button {
+.dnd5e2 .spire-stat button {
   width: 1.5rem;
   height: 1.5rem;
   padding: 0;
@@ -78,101 +87,99 @@
   cursor: pointer;
 }
 
-.dnd5e .spire-stat button:disabled {
+.dnd5e2 .spire-stat button:disabled {
   opacity: 0.35;
   cursor: not-allowed;
 }
 
-.dnd5e .spire-stat-value {
+.dnd5e2 .spire-stat-value {
   width: 1.5rem;
   text-align: center;
   font-weight: bold;
 }
 
-.dnd5e .spire-stat-bonus {
-  color: #18520b;
-  font-weight: bold;
-  font-size: 0.85rem;
-  flex-shrink: 0;
-}
-
-.dnd5e .spire-stat-perk {
+.dnd5e2 .spire-stat-effect {
   margin-left: auto;
   font-size: 0.75rem;
   color: #544e80;
   font-style: italic;
-  white-space: nowrap;
+  min-width: 0;
+  flex-shrink: 1;
+  overflow-wrap: anywhere;
 }
 
 /* Weapon Groups Section */
-.dnd5e .spire-weapon-groups {
+.dnd5e2 .spire-weapon-groups {
   margin-top: 1rem;
   border-top: 1px solid #7a7971;
   padding-top: 0.5rem;
 }
 
-.dnd5e .spire-weapon-groups h3 {
+.dnd5e2 .spire-weapon-groups h3 {
   margin: 0 0 0.5rem 0;
   border: none;
 }
 
-.dnd5e .spire-weapon-group {
+.dnd5e2 .spire-weapon-group {
   padding: 0.35rem 0.5rem;
   border: 1px solid #7a7971;
   border-radius: 3px;
   background: rgba(0, 0, 0, 0.03);
   margin-bottom: 0.4rem;
+  min-width: 0;
 }
 
-.dnd5e .group-row-main {
+.dnd5e2 .group-row-main {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
 }
 
-.dnd5e .group-name {
+.dnd5e2 .group-name {
   font-weight: bold;
   font-size: 0.85rem;
   flex: 1;
 }
 
-.dnd5e .group-level {
+.dnd5e2 .group-level {
   font-weight: bold;
   color: #18520b;
   font-size: 0.85rem;
   flex-shrink: 0;
 }
 
-.dnd5e .group-xp-input {
+.dnd5e2 .group-xp-input {
   width: 3.5rem;
   text-align: center;
   font-size: 0.8rem;
 }
 
-.dnd5e .group-xp-value {
+.dnd5e2 .group-xp-value {
   font-size: 0.8rem;
   width: 3.5rem;
   text-align: center;
 }
 
-.dnd5e .group-xp-label {
+.dnd5e2 .group-xp-label {
   font-size: 0.75rem;
   color: #7a7971;
 }
 
-.dnd5e .group-row-detail {
+.dnd5e2 .group-row-detail {
   display: flex;
   justify-content: space-between;
   font-size: 0.75rem;
   margin-top: 0.2rem;
 }
 
-.dnd5e .group-bonuses {
+.dnd5e2 .group-bonuses {
   color: #544e80;
   font-style: italic;
 }
 
-.dnd5e .group-items {
+.dnd5e2 .group-items {
   color: #7a7971;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -181,16 +188,26 @@
   text-align: right;
 }
 
-.dnd5e .group-milestones {
+.dnd5e2 .group-milestones {
   list-style: none;
   padding: 0;
   margin: 0.25rem 0 0 0;
   font-size: 0.75rem;
 }
 
-.dnd5e .group-milestones li {
+.dnd5e2 .group-milestones li {
   padding: 0.1rem 0;
   color: #544e80;
+}
+
+/* Chat message: weapon group level-up */
+.spire-levelup {
+  padding: 0.4rem 0.5rem;
+  font-size: 0.9rem;
+  color: #18520b;
+  background: rgba(24, 82, 11, 0.08);
+  border-left: 3px solid #18520b;
+  border-radius: 2px;
 }
 
 /* Chat message: scaling info + milestones */
@@ -243,6 +260,22 @@
 .spire-group-config .group-name-input {
   flex: 1;
   font-weight: bold;
+}
+
+.spire-group-config .group-ddn-label {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: #4b4a44;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.spire-group-config .group-ddn-input {
+  width: 3.5rem;
+  text-align: center;
 }
 
 .spire-group-config .group-items-list {
@@ -312,6 +345,15 @@
   width: 4rem;
   text-align: center;
   font-size: 0.85rem;
+}
+
+.spire-group-config .remove-group,
+.spire-group-config .remove-item,
+.spire-group-config .add-item,
+.spire-group-config .add-milestone,
+.spire-group-config .remove-milestone {
+  width: 4rem;
+  flex-shrink: 0;
 }
 
 .spire-group-config .hint {
@@ -397,11 +439,20 @@
 }
 
 /* Potions Tab */
-.dnd5e .tab.potions {
-  padding: 0.5rem 1rem;
+.dnd5e2 .tab.potions {
+  padding: 0.5rem 0.5rem;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
-.dnd5e .potion-cooldown-active {
+.dnd5e2 .tab.potions * {
+  box-sizing: border-box;
+}
+
+.dnd5e2 .potion-cooldown-active {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   background: #f8d7da;
   border: 1px solid #f5c6cb;
   border-radius: 3px;
@@ -412,59 +463,71 @@
   font-weight: bold;
 }
 
-.dnd5e .potion-section {
+.dnd5e2 .potion-cooldown-cancel {
+  margin-left: auto;
+  font-size: 0.75rem;
+  padding: 0.1rem 0.4rem;
+  cursor: pointer;
+  color: #721c24;
+}
+
+.dnd5e2 .potion-section {
   margin-bottom: 0.75rem;
 }
 
-.dnd5e .potion-section h3 {
+.dnd5e2 .potion-section h3 {
   margin: 0 0 0.35rem 0;
   border: none;
   font-size: 0.9rem;
 }
 
-.dnd5e .potion-list {
+.dnd5e2 .potion-list {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
 }
 
-.dnd5e .potion-empty {
+.dnd5e2 .potion-empty {
   font-size: 0.8rem;
   color: #7a7971;
   font-style: italic;
 }
 
-.dnd5e .potion-row {
+.dnd5e2 .potion-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem;
   padding: 0.3rem 0.5rem;
   border: 1px solid #7a7971;
   border-radius: 3px;
   background: rgba(0, 0, 0, 0.03);
+  min-width: 0;
 }
 
-.dnd5e .potion-label {
+.dnd5e2 .potion-label {
   font-weight: bold;
   font-size: 0.85rem;
   width: 2.5rem;
 }
 
-.dnd5e .potion-count {
+.dnd5e2 .potion-count {
   font-weight: bold;
   font-size: 0.85rem;
   width: 2rem;
   text-align: center;
 }
 
-.dnd5e .potion-effect {
+.dnd5e2 .potion-effect {
   font-size: 0.75rem;
   color: #544e80;
   font-style: italic;
-  flex: 1;
+  flex: 1 1 4rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-.dnd5e .potion-row button {
+.dnd5e2 .potion-row button {
   width: 1.5rem;
   height: 1.5rem;
   padding: 0;
@@ -474,30 +537,47 @@
 }
 
 /* Add potion row */
-.dnd5e .potion-add-row {
+.dnd5e2 .potion-add-row {
   display: flex;
-  gap: 0.35rem;
-  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-end;
   margin-top: 0.75rem;
   padding-top: 0.5rem;
   border-top: 1px solid #7a7971;
+  min-width: 0;
 }
 
-.dnd5e .potion-add-type {
+.dnd5e2 .potion-add-field {
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.dnd5e2 .potion-add-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.7rem;
+  color: #7a7971;
+  text-transform: uppercase;
+  font-weight: bold;
+}
+
+.dnd5e2 .potion-add-type {
   width: 5rem;
 }
 
-.dnd5e .potion-add-level {
+.dnd5e2 .potion-add-level {
   width: 3rem;
   text-align: center;
 }
 
-.dnd5e .potion-add-count {
+.dnd5e2 .potion-add-count {
   width: 3rem;
   text-align: center;
 }
 
-.dnd5e .potion-add-btn {
+.dnd5e2 .potion-add-btn {
   font-size: 0.8rem;
   cursor: pointer;
 }
