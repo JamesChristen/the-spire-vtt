@@ -1,5 +1,7 @@
 // Potions — Health and Mana potion pool system with cooldown tracking
 
+import { getSheetTabPanel } from "./sheet-tabs.mjs";
+
 const MODULE_ID = "the-spire";
 
 // --- Data Helpers ---
@@ -44,9 +46,9 @@ async function useHealthPotion(actor, level) {
   const roll = await new Roll(`${level}d6`).evaluate();
   const healing = roll.total;
 
-  // Apply healing (capped at max HP)
+  // Apply healing (capped at effective max HP, which includes temp max HP)
   const hp = actor.system.attributes.hp;
-  const newHp = Math.min(hp.max, hp.value + healing);
+  const newHp = Math.min(hp.effectiveMax ?? hp.max, hp.value + healing);
   await actor.update({ "system.attributes.hp.value": newHp });
 
   await applyCooldown(actor, level);
@@ -120,9 +122,19 @@ async function applyCooldown(actor, potionLevel) {
 
 // --- Combat Turn Hook (cooldown decrement) ---
 
-export function handleCombatTurn(combat, updateData, updateOptions) {
-  const combatant = combat.combatants.get(combat.current?.combatantId);
-  const actor = combatant?.actor;
+// combatTurnChange fires on every client AFTER the turn has advanced, so `current` is the
+// combatant whose turn is starting. A cooldown therefore lasts until the drinker's next turn
+// starts (the old combatTurn/combatRound hooks fired before the update, on the clicking client
+// only, and ticked the drinker's own turn as it ended — a Lv 1 cooldown expired immediately).
+export function handleCombatTurnChange(combat, previous, current) {
+  if (!game.user.isActiveGM) return;
+
+  // Only tick when moving forward — rewinding a turn shouldn't consume cooldown.
+  const forward = (current.round > previous.round)
+    || ((current.round === previous.round) && (current.turn > previous.turn));
+  if (!forward) return;
+
+  const actor = combat.combatants.get(current.combatantId)?.actor;
   if (!actor) return;
 
   const cd = actor.getFlag(MODULE_ID, "potionCooldown");
@@ -138,52 +150,24 @@ export function handleCombatTurn(combat, updateData, updateOptions) {
 
 // --- Character Sheet Tab (native DOM) ---
 
+// Fills the natively-registered "potions" panel. Runs on every sheet render; flag changes
+// re-render the sheet, so handlers just write flags and the next render rebuilds the content.
 export function renderPotionsTab(app, element) {
+  const panel = getSheetTabPanel(element, "potions");
+  if (!panel) return;
+
   const actor = app.actor;
+  panel.replaceChildren(buildPotionsContent(actor));
+  if (actor.isOwner) wirePotionButtons(actor, panel);
+}
+
+function buildPotionsContent(actor) {
   const potions = getPotionData(actor);
   const cooldown = getCooldown(actor);
   const isOwner = actor.isOwner;
   const onCooldown = isOnCooldown(actor);
 
-  // Find tab navigation — dnd5e 5.x renders a <nav class="tabs" data-group="primary"> via sidebar-tabs.hbs
-  const tabNav = element.querySelector('nav.tabs[data-group="primary"]')
-    ?? element.querySelector(".tabs-right .tab-list")
-    ?? element.querySelector('[role="tablist"]')
-    ?? element.querySelector(".sheet-tabs");
-
-  if (!tabNav) return;
-
-  // Only skip if our nav button is already present.
-  // A partial re-render can remove the nav button while leaving the panel behind —
-  // in that case we fall through, clean up the orphaned panel, and re-inject both.
-  if (tabNav.querySelector('[data-tab="potions"]')) return;
-  element.querySelector('.tab[data-tab="potions"]')?.remove();
-
-  // Add tab button — match dnd5e 5.x's <a class="item control" data-action="tab"> pattern
-  const tabButton = document.createElement("a");
-  tabButton.className = "item control";
-  tabButton.dataset.action = "tab";
-  tabButton.dataset.tab = "potions";
-  tabButton.dataset.group = "primary";
-
-  const tabIcon = document.createElement("i");
-  tabIcon.className = "fa-solid fa-flask";
-  tabButton.appendChild(tabIcon);
-  tabNav.appendChild(tabButton);
-
-  // Find tab body
-  const tabBody = element.querySelector("#tabs")
-    ?? element.querySelector(".tab-body")
-    ?? element.querySelector(".sheet-body");
-
-  if (!tabBody) return;
-
-  // Build potions tab content
-  const tabContent = document.createElement("div");
-  tabContent.className = "tab potions";
-  tabContent.dataset.group = "primary";
-  tabContent.dataset.tab = "potions";
-  tabContent.setAttribute("role", "tabpanel");
+  const tabContent = document.createDocumentFragment();
 
   // Cooldown notice
   if (onCooldown) {
@@ -263,38 +247,27 @@ export function renderPotionsTab(app, element) {
 
     addRow.append(typeLabel, levelLabel, countLabel, addBtn);
     tabContent.appendChild(addRow);
-
-    // Add potion handler
-    addBtn.addEventListener("click", async () => {
-      const type = typeSelect.value;
-      const level = parseInt(levelInput.value) || 1;
-      const count = parseInt(countInput.value) || 1;
-      if (level < 1 || count < 1) return;
-
-      const currentPotions = getPotionData(actor);
-      const current = currentPotions[type][level] ?? 0;
-      await actor.setFlag(MODULE_ID, `potions.${type}.${level}`, current + count);
-    });
   }
 
-  tabBody.appendChild(tabContent);
+  return tabContent;
+}
 
-  // Restore active state if this tab was active before the re-render
-  if (app.tabGroups?.primary === "potions") {
-    tabButton.classList.add("active");
-    tabContent.classList.add("active");
-  }
+function wirePotionButtons(actor, panel) {
+  panel.querySelector(".potion-add-btn")?.addEventListener("click", async () => {
+    const type = panel.querySelector(".potion-add-type").value;
+    const level = parseInt(panel.querySelector(".potion-add-level").value) || 1;
+    const count = parseInt(panel.querySelector(".potion-add-count").value) || 1;
+    if (level < 1 || count < 1) return;
 
-  // Tab switching is handled by data-action="tab" — Foundry's changeTab toggles .active on nav + panels
+    const current = getPotionData(actor)[type][level] ?? 0;
+    await actor.setFlag(MODULE_ID, `potions.${type}.${level}`, current + count);
+  });
 
-  // Use/remove/cancel handlers (owner only)
-  if (!isOwner) return;
-
-  tabContent.querySelector(".potion-cooldown-cancel")?.addEventListener("click", async () => {
+  panel.querySelector(".potion-cooldown-cancel")?.addEventListener("click", async () => {
     await actor.unsetFlag(MODULE_ID, "potionCooldown");
   });
 
-  tabContent.querySelectorAll(".potion-use").forEach(btn => {
+  panel.querySelectorAll(".potion-use").forEach(btn => {
     btn.addEventListener("click", async () => {
       const row = btn.closest(".potion-row");
       const type = row.dataset.potionType;
@@ -307,7 +280,7 @@ export function renderPotionsTab(app, element) {
     });
   });
 
-  tabContent.querySelectorAll(".potion-remove").forEach(btn => {
+  panel.querySelectorAll(".potion-remove").forEach(btn => {
     btn.addEventListener("click", async () => {
       const row = btn.closest(".potion-row");
       const type = row.dataset.potionType;

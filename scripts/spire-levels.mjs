@@ -1,5 +1,7 @@
 // Spire Levels — parallel leveling and stat allocation system
 
+import { getSheetTabPanel } from "./sheet-tabs.mjs";
+
 const MODULE_ID = "the-spire";
 const ABILITIES = ["str", "dex", "con", "int", "wis", "cha"];
 const ABILITY_LABELS = { str: "STR", dex: "DEX", con: "CON", int: "INT", wis: "WIS", cha: "CHA" };
@@ -28,7 +30,7 @@ function getSpirePerks(bases) {
     con: { label: "Max HP", value: `+${bases.con ?? 0}` },
     int: { label: "Prof/Expertise", value: getBonus(bases.int ?? 0) },
     wis: { label: "Exam Tips", value: getBonus(bases.wis ?? 0) },
-    cha: { label: "Barter", value: `${getBonus(bases.cha ?? 0)}%` },
+    cha: { label: "Barter", value: `${bases.cha ?? 0}%` },
   };
 }
 
@@ -54,41 +56,35 @@ function applySpirePreBonuses(actor) {
     }
   }
 
-  // STR: +5ft movement per 5 points — movement.walk is a base value prepareDerivedData adds to
-  const moveBonus = getBonus(bases.str ?? 0) * 5;
-  if (moveBonus > 0 && attrs.movement) {
-    attrs.movement.walk = (Number(attrs.movement.walk) || 0) + moveBonus;
-  }
+  // DEX: +1 AC per 5 points. ac.bonus is a non-persisted formula that dnd5e 6.x initialises
+  // fresh each prepare and folds into ac.value in prepareArmorClass (so it respects AC overrides).
+  const acBonus = getBonus(bases.dex ?? 0);
+  if (acBonus > 0 && attrs.ac) appendFormula(attrs.ac, "bonus", acBonus);
 
   // CON: +1 max HP per 1 point. Inject via dnd5e's own hp.bonuses.overall formula so the
   // bonus is folded into hp.max during prepareHitPoints (step 4) BEFORE it clamps
-  // hp.value to effectiveMax (dnd5e.mjs:26010). Adding to hp.max in prepareDerivedData
-  // (step 5) is too late — the clamp has already pinned displayed HP to the base max.
+  // hp.value to effectiveMax. Adding to hp.max in prepareDerivedData (step 5) is too
+  // late — the clamp has already pinned displayed HP to the base max.
   const hpBonus = bases.con ?? 0;
-  if (hpBonus > 0 && attrs.hp?.bonuses) {
-    const overall = attrs.hp.bonuses.overall;
-    attrs.hp.bonuses.overall = overall ? `${overall} + ${hpBonus}` : String(hpBonus);
-  }
+  if (hpBonus > 0 && attrs.hp?.bonuses) appendFormula(attrs.hp.bonuses, "overall", hpBonus);
 }
 
-// Called AFTER origPrepare — AC is fully recomputed by prepareDerivedData, so we add on top
-// of the finished value rather than trying to pre-set it. (HP max is handled in the pre step.)
-function applySpirePostBonuses(actor) {
+// Called from a system.prepareDerivedData wrapper, just before dnd5e's prepareMovement. It can't
+// go in the base step: species speed is applied during embedded prep and only fills speeds that
+// are still empty, so a base-step bonus would replace a species' 30ft walk with just the bonus.
+function applySpireMovementBonus(actor) {
   if (actor.type !== "character") return;
 
-  const bases = actor.getFlag(MODULE_ID, "bases");
-  if (!bases) return;
+  // STR: +5ft walking speed per 5 points
+  const moveBonus = getBonus(actor.getFlag(MODULE_ID, "bases")?.str ?? 0) * 5;
+  const speeds = actor.system.attributes.movement?.speeds;
+  if (moveBonus > 0 && speeds) appendFormula(speeds, "walk", moveBonus);
+}
 
-  const attrs = actor.system.attributes;
-
-  // DEX: +1 AC per 5 points
-  const acBonus = getBonus(bases.dex ?? 0);
-  if (acBonus > 0 && attrs.ac) {
-    attrs.ac.value = (attrs.ac.value ?? 0) + acBonus;
-  }
-
-  // CON max-HP bonus is applied in applySpirePreBonuses via hp.bonuses.overall so it is
-  // folded into hp.max before dnd5e clamps hp.value (see note there).
+// Add a flat bonus to a dnd5e formula-string field, preserving whatever is already there.
+function appendFormula(obj, key, bonus) {
+  const current = obj[key];
+  obj[key] = current ? `${current} + ${bonus}` : String(bonus);
 }
 
 // --- Tab Rendering (native DOM — no jQuery) ---
@@ -220,17 +216,6 @@ function buildSpireLevelContent(actor) {
   return container;
 }
 
-// --- Rest Handling ---
-
-export async function handleRestCompleted(actor, result) {
-  if (!result?.longRest) return;
-  if (actor?.type !== "character") return;
-  const hp = actor.system.attributes?.hp;
-  if (!hp || hp.max == null) return;
-  if (hp.value >= hp.max) return;
-  await actor.update({ "system.attributes.hp.value": hp.max });
-}
-
 // --- Exports ---
 
 export function initSpireLevels() {
@@ -242,116 +227,55 @@ export function initSpireLevels() {
     applySpirePreBonuses(this);
   };
 
-  const origDerived = ActorClass.prototype.prepareDerivedData;
-  ActorClass.prototype.prepareDerivedData = function () {
-    origDerived.call(this);
-    applySpirePostBonuses(this);
+  // Wrap the character data model (not the Actor): its prepareDerivedData is where dnd5e runs
+  // prepareMovement, and it runs after species speed has been applied.
+  const CharacterData = CONFIG.Actor.dataModels.character;
+  const origSystemDerived = CharacterData.prototype.prepareDerivedData;
+  CharacterData.prototype.prepareDerivedData = function () {
+    applySpireMovementBonus(this.parent);
+    origSystemDerived.call(this);
   };
 }
 
+// Fills the natively-registered "spire" panel. Runs on every sheet render; flag changes
+// re-render the sheet, so handlers just write flags and the next render rebuilds the content.
 export function renderSpireLevelTab(app, element) {
+  const panel = getSheetTabPanel(element, "spire");
+  if (!panel) return;
+
   const actor = app.actor;
-
-  // Find the tab navigation — dnd5e 5.x renders a <nav class="tabs" data-group="primary"> via sidebar-tabs.hbs
-  const tabNav = element.querySelector('nav.tabs[data-group="primary"]')
-    ?? element.querySelector(".tabs-right .tab-list")
-    ?? element.querySelector('[role="tablist"]')
-    ?? element.querySelector(".sheet-tabs");
-
-  if (!tabNav) {
-    console.warn("The Spire | Could not find tab navigation in character sheet");
-    return;
-  }
-
-  // Only skip if our nav button is already present.
-  // A partial re-render can remove the nav button while leaving the panel behind —
-  // in that case we fall through, clean up the orphaned panel, and re-inject both.
-  if (tabNav.querySelector('[data-tab="spire"]')) return;
-  element.querySelector('.tab[data-tab="spire"]')?.remove();
-
-  // Add tab button — match dnd5e 5.x's <a class="item control" data-action="tab"> pattern
-  const tabButton = document.createElement("a");
-  tabButton.className = "item control";
-  tabButton.dataset.action = "tab";
-  tabButton.dataset.tab = "spire";
-  tabButton.dataset.group = "primary";
-
-  const tabIcon = document.createElement("i");
-  tabIcon.className = "fa-solid fa-tower-observation";
-  tabButton.appendChild(tabIcon);
-  tabNav.appendChild(tabButton);
-
-  // Find the tab content container
-  const tabBody = element.querySelector("#tabs")
-    ?? element.querySelector(".tab-body")
-    ?? element.querySelector(".sheet-body");
-
-  if (!tabBody) {
-    console.warn("The Spire | Could not find tab body container");
-    return;
-  }
-
-  // Create the spire tab content
-  const tabContent = document.createElement("div");
-  tabContent.className = "tab spire";
-  tabContent.dataset.group = "primary";
-  tabContent.dataset.tab = "spire";
-  tabContent.setAttribute("role", "tabpanel");
-  tabContent.appendChild(buildSpireLevelContent(actor));
-  tabBody.appendChild(tabContent);
-
-  // Restore active state if this tab was active before the re-render
-  if (app.tabGroups?.primary === "spire") {
-    tabButton.classList.add("active");
-    tabContent.classList.add("active");
-  }
-
-  // Tab switching is handled by data-action="tab" — Foundry's changeTab toggles .active on nav + panels
-
-  // Wire up interactive buttons (owner only), rebuilding content after each change
-  if (!actor.isOwner) return;
-  wireSpireButtons(actor, tabContent);
+  panel.replaceChildren(buildSpireLevelContent(actor));
+  if (actor.isOwner) wireSpireButtons(actor, panel);
 }
 
-function wireSpireButtons(actor, tabContent) {
-  function refresh() {
-    tabContent.replaceChildren(buildSpireLevelContent(actor));
-    wireSpireButtons(actor, tabContent);
-  }
-
-  tabContent.querySelector(".spire-level-down")?.addEventListener("click", async () => {
+function wireSpireButtons(actor, panel) {
+  panel.querySelector(".spire-level-down")?.addEventListener("click", async () => {
     const current = actor.getFlag(MODULE_ID, "spireLevel") ?? 0;
     if (current <= 0) return;
     await actor.setFlag(MODULE_ID, "spireLevel", current - 1);
-    refresh();
   });
 
-  tabContent.querySelector(".spire-level-up")?.addEventListener("click", async () => {
+  panel.querySelector(".spire-level-up")?.addEventListener("click", async () => {
     const current = actor.getFlag(MODULE_ID, "spireLevel") ?? 0;
     await actor.setFlag(MODULE_ID, "spireLevel", current + 1);
-    refresh();
   });
 
-  tabContent.querySelectorAll(".spire-stat-plus").forEach(btn => {
+  panel.querySelectorAll(".spire-stat-plus").forEach(btn => {
     btn.addEventListener("click", async () => {
-      const { spireLevel, bases } = getSpireData(actor);
-      const allocated = Object.values(bases).reduce((sum, v) => sum + v, 0);
-      if (allocated >= spireLevel) return;
+      const { bases, unallocated } = getSpireData(actor);
+      if (unallocated <= 0) return;
       const ability = btn.closest(".spire-stat").dataset.ability;
-      const current = bases[ability] ?? 0;
-      await actor.setFlag(MODULE_ID, `bases.${ability}`, current + 1);
-      refresh();
+      await actor.setFlag(MODULE_ID, `bases.${ability}`, (bases[ability] ?? 0) + 1);
     });
   });
 
-  tabContent.querySelectorAll(".spire-stat-minus").forEach(btn => {
+  panel.querySelectorAll(".spire-stat-minus").forEach(btn => {
     btn.addEventListener("click", async () => {
+      const { bases } = getSpireData(actor);
       const ability = btn.closest(".spire-stat").dataset.ability;
-      const bases = actor.getFlag(MODULE_ID, "bases") ?? {};
       const current = bases[ability] ?? 0;
       if (current <= 0) return;
       await actor.setFlag(MODULE_ID, `bases.${ability}`, current - 1);
-      refresh();
     });
   });
 }

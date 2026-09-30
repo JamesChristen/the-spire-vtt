@@ -1,18 +1,27 @@
 // The Spire — Entry Point
 // Custom level scaling and dice mechanics for D&D 5e
-// Requires Foundry v14+ and dnd5e 5.x+
+// Requires Foundry v14+ and dnd5e 6.x+
 
-import { initSpireLevels, renderSpireLevelTab, handleRestCompleted } from "./spire-levels.mjs";
+import { initSpireLevels, renderSpireLevelTab } from "./spire-levels.mjs";
 import {
   initWeaponGroups,
   renderWeaponGroupsSection,
   handlePreAttack,
   handlePreDamage,
-  handleDamageRoll,
   handleActivityUse,
 } from "./weapon-groups.mjs";
+import { initGroupScaling } from "./group-scaling.mjs";
+import {
+  initGroupXp,
+  readyGroupXp,
+  handlePreApplyDamage,
+  handleApplyDamage,
+  handleSavingThrow,
+  handleRenderChatMessage,
+} from "./group-xp.mjs";
 import { initNetAdvantage } from "./net-advantage.mjs";
-import { renderPotionsTab, handleCombatTurn } from "./potions.mjs";
+import { renderPotionsTab, handleCombatTurnChange } from "./potions.mjs";
+import { registerSheetTab } from "./sheet-tabs.mjs";
 
 const MODULE_ID = "the-spire";
 
@@ -20,7 +29,12 @@ Hooks.once("init", () => {
   console.log("The Spire | Initializing");
   initSpireLevels();
   initWeaponGroups();
+  initGroupScaling();
+  initGroupXp();
   initNetAdvantage();
+
+  registerSheetTab({ id: "spire", label: "THE_SPIRE.TabLabel", icon: "fa-solid fa-tower-observation" });
+  registerSheetTab({ id: "potions", label: "THE_SPIRE.Potions.TabLabel", icon: "fa-solid fa-flask" });
 });
 
 Hooks.once("ready", () => {
@@ -28,47 +42,33 @@ Hooks.once("ready", () => {
     ui.notifications.error("The Spire requires the D&D 5e system.");
     return;
   }
+  readyGroupXp();
   console.log("The Spire | Ready");
 });
 
 // --- Character Sheet Tabs ---
-// dnd5e 5.x uses ApplicationV2. The render hook follows the pattern: render + ClassName.
-// CharacterActorSheet is the class name. If this doesn't fire, the fallback catches it.
-let _specificHookFired = false;
-
-Hooks.on("renderCharacterActorSheet", (app, element, options) => {
-  _specificHookFired = true;
+// ApplicationV2 fires render{ClassName} for each class in the hierarchy, so this also covers
+// any module sheet that subclasses CharacterActorSheet. Fires on every render, including partial.
+Hooks.on("renderCharacterActorSheet", (app, element, context, options) => {
   if (app.actor?.type !== "character") return;
-  renderSpireLevelTab(app, element);
-  renderWeaponGroupsSection(app, element);
-  renderPotionsTab(app, element);
-});
-
-// Fallback: if the named hook doesn't exist in this Foundry version
-Hooks.on("renderApplication", (app, element, options) => {
-  if (_specificHookFired) return;
-  if (app.constructor.name !== "CharacterActorSheet") return;
-  if (app.actor?.type !== "character") return;
-
-  console.log("The Spire | Using renderApplication fallback for:", app.constructor.name);
   renderSpireLevelTab(app, element);
   renderWeaponGroupsSection(app, element);
   renderPotionsTab(app, element);
 });
 
 // --- Roll Hooks (Weapon Groups) ---
-// dnd5e 5.x signatures: (config, dialogConfig, messageConfig) for pre-roll
-// and (rolls, data) for post-roll
+// Signatures: (config, dialogConfig, messageConfig) for pre-roll and (rolls, data) for post-roll
 Hooks.on("dnd5e.preRollAttack", handlePreAttack);
 Hooks.on("dnd5e.preRollDamage", handlePreDamage);
-Hooks.on("dnd5e.rollDamage", handleDamageRoll);
 
-// --- Activity Use (replaces dnd5e.useItem) ---
+// --- Activity Use ---
 Hooks.on("dnd5e.postUseActivity", handleActivityUse);
 
-// --- Combat Hooks (potion cooldown) ---
-Hooks.on("combatTurn", handleCombatTurn);
-Hooks.on("combatRound", handleCombatTurn);
+// --- Group XP (see group-xp.mjs) ---
+Hooks.on("dnd5e.preApplyDamage", handlePreApplyDamage);
+Hooks.on("dnd5e.applyDamage", handleApplyDamage);
+Hooks.on("dnd5e.rollSavingThrow", handleSavingThrow);
+Hooks.on("renderChatMessageHTML", handleRenderChatMessage);
 
-// Long rest: top HP including Spire CON bonus
-Hooks.on("dnd5e.restCompleted", handleRestCompleted);
+// --- Combat Hooks (potion cooldown) ---
+Hooks.on("combatTurnChange", handleCombatTurnChange);

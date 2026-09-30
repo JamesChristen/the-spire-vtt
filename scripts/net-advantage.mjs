@@ -4,44 +4,38 @@
 // Net -N → roll (1+N)d20 keep lowest
 // Net  0 → normal 1d20
 //
-// dnd5e 5.x: D20RollConfigurationDialog has 3 submit buttons (advantage/normal/disadvantage).
-// We hook its render to inject a +/- net advantage control, then intercept the roll
-// finalization to apply the net value instead of binary advantage.
+// dnd5e: D20RollConfigurationDialog has 3 submit buttons (advantage/normal/disadvantage).
+// We inject a +/- net advantage control into the dialog, then in postRollConfiguration combine
+// the control's value with the button that was clicked and rebuild the d20.
 
-const MODULE_ID = "the-spire";
-
-// Pending net advantage value — set by dialog UI, consumed by roll hooks
-let _pendingNetAdvantage = 0;
+// Net advantage value entered in each open dialog, keyed by the dialog's process config.
+// dnd5e passes that same config object to dnd5e.postRollConfiguration, so the value is tied to
+// exactly one roll — a cancelled dialog can't leak into a later fast-forwarded roll.
+const _netAdvantage = new WeakMap();
 
 // --- Dialog Injection ---
 
 /**
- * Hook the render of D20RollConfigurationDialog to inject net advantage controls.
- * The dialog is an ApplicationV2, so the render hook pattern is:
- *   renderD20RollConfigurationDialog(app, element, options)
- * If that name is wrong, we fall back to renderApplication and filter by class name.
+ * renderD20RollConfigurationDialog fires for every subclass too (AttackRollConfigurationDialog,
+ * SkillToolRollConfigurationDialog, …), since ApplicationV2 calls render hooks up the class chain.
  */
 function injectNetAdvantageUI(app, element) {
-  // Only target d20 roll dialogs
-  const className = app.constructor.name;
-  if (className !== "D20RollConfigurationDialog"
-    && className !== "AttackRollConfigurationDialog") return;
-
   // Don't inject twice
   if (element.querySelector(".spire-net-advantage")) return;
 
-  // Reset pending value for this new dialog
-  _pendingNetAdvantage = 0;
-
-  // Find a good place to inject — look for the configuration section or button area
-  const configSection = element.querySelector(".roll-configuration")
-    ?? element.querySelector('[data-application-part="configuration"]')
+  const configSection = element.querySelector('[data-application-part="configuration"]')
     ?? element.querySelector("form");
 
   if (!configSection) {
     console.warn("The Spire | Could not find roll dialog configuration section");
     return;
   }
+
+  const config = app.config;
+  const setValue = value => {
+    _netAdvantage.set(config, value);
+    input.value = String(value);
+  };
 
   // Build the net advantage control
   const container = document.createElement("div");
@@ -62,8 +56,9 @@ function injectNetAdvantageUI(app, element) {
   const input = document.createElement("input");
   input.type = "number";
   input.className = "spire-net-adv-value";
-  input.value = "0";
   input.step = "1";
+  // Preserve the value if the configuration part is re-rendered while the dialog is open
+  input.value = String(_netAdvantage.get(config) ?? 0);
 
   const plusBtn = document.createElement("button");
   plusBtn.type = "button";
@@ -75,84 +70,61 @@ function injectNetAdvantageUI(app, element) {
 
   const desc = document.createElement("span");
   desc.className = "spire-net-adv-desc";
-  desc.textContent = "0 = normal, + = advantage, - = disadvantage";
+  desc.textContent = "Combined with the button you roll with: Advantage +1, Disadvantage -1";
 
   container.append(label, control, desc);
   configSection.appendChild(container);
 
-  // Event handlers
-  input.addEventListener("change", () => {
-    _pendingNetAdvantage = parseInt(input.value) || 0;
-  });
+  // Register the dialog even at 0, so choosing "Normal" with a net of 0 is still honoured.
+  _netAdvantage.set(config, parseInt(input.value) || 0);
 
-  minusBtn.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const current = parseInt(input.value) || 0;
-    input.value = String(current - 1);
-    _pendingNetAdvantage = current - 1;
-  });
-
-  plusBtn.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const current = parseInt(input.value) || 0;
-    input.value = String(current + 1);
-    _pendingNetAdvantage = current + 1;
-  });
-
-  // Intercept the dialog's submit buttons to capture advantage mode + net value
-  // The dialog has buttons: advantage, normal, disadvantage
-  // When clicked, _finalizeRolls(action) is called with the action name
-  // We need to combine the button's implicit ±1 with our net advantage value
-  const submitButtons = element.querySelectorAll('button[data-action="advantage"], button[data-action="normal"], button[data-action="disadvantage"]');
-
-  for (const btn of submitButtons) {
-    btn.addEventListener("click", () => {
-      const action = btn.dataset.action;
-      // Map button action to advantage offset
-      let buttonOffset = 0;
-      if (action === "advantage") buttonOffset = 1;
-      else if (action === "disadvantage") buttonOffset = -1;
-
-      // Combine with net advantage
-      _pendingNetAdvantage = (parseInt(input.value) || 0) + buttonOffset;
-    }, { capture: true }); // capture phase so we run before the dialog's handler
-  }
+  input.addEventListener("change", () => setValue(parseInt(input.value) || 0));
+  minusBtn.addEventListener("click", () => setValue((parseInt(input.value) || 0) - 1));
+  plusBtn.addEventListener("click", () => setValue((parseInt(input.value) || 0) + 1));
 }
 
 // --- Roll Modification ---
 
 /**
- * After the dialog closes and D20Roll instances are fully built, apply net advantage
- * by directly modifying the d20 die's number and keep modifier.
- * Hook: dnd5e.postRollConfiguration — fires with (rolls, config, dialog, message)
- * where rolls are actual D20Roll instances with .d20 available.
+ * Hook: dnd5e.postRollConfiguration — (rolls, config, dialog, message). Fires once the dialog has
+ * closed and the D20Roll instances are built. The dialog's _finalizeConfig has already written the
+ * clicked button into roll.options.advantageMode (+1 / 0 / -1), so we read it back from there
+ * rather than intercepting button clicks (which also covers submitting with Enter).
  */
-function handlePostRollConfiguration(rolls) {
-  const net = _pendingNetAdvantage;
-  _pendingNetAdvantage = 0; // always consume
+function handlePostRollConfiguration(rolls, config) {
+  // Only rolls made through a dialog with our control; fast-forwarded rolls are left alone.
+  if (!_netAdvantage.has(config)) return;
+  const inputValue = _netAdvantage.get(config);
+  _netAdvantage.delete(config);
 
-  if (net === 0) return;
-
-  const absNet = Math.abs(net);
-  const keep = net > 0 ? "kh" : "kl";
+  const { ADV_MODE } = CONFIG.Dice.D20Roll;
 
   for (const roll of rolls) {
     const die = roll.d20;
     if (!die) continue;
 
-    // Clear adv/dis/kh/kl modifiers set by _finalizeRolls → configureModifiers
-    die.modifiers.findSplice(m => m.startsWith("adv") || m.startsWith("dis") || m === "kh" || m === "kl");
+    const net = inputValue + (roll.options.advantageMode ?? ADV_MODE.NORMAL);
 
-    // Apply net dice count and explicit keep modifier
-    die.number = 1 + absNet;
-    die.modifiers.push(`${keep}1`);
+    // Net 0 means a plain d20 even if a button implied adv/dis (e.g. +1 then "Disadvantage")
+    if (net === 0) {
+      die.applyAdvantage(ADV_MODE.NORMAL);
+      roll.options.advantageMode = ADV_MODE.NORMAL;
+      roll.resetFormula();
+      continue;
+    }
+
+    const mode = net > 0 ? ADV_MODE.ADVANTAGE : ADV_MODE.DISADVANTAGE;
+
+    // Clear adv/dis/kh/kl modifiers, then apply the net dice count with an explicit keep
+    die.applyAdvantage(ADV_MODE.NORMAL);
+    // Elven Accuracy: dnd5e rolls an extra die on advantage ("adv2") — keep that on top of net
+    const elvenBonus = (net > 0 && die.options.elvenAccuracy) ? 1 : 0;
+    die.number = 1 + Math.abs(net) + elvenBonus;
+    die.modifiers.push(net > 0 ? "kh1" : "kl1");
 
     // Keep advantageMode consistent for any downstream code that reads it
-    roll.options.advantageMode = net > 0
-      ? CONFIG.Dice.D20Roll.ADV_MODE.ADVANTAGE
-      : CONFIG.Dice.D20Roll.ADV_MODE.DISADVANTAGE;
+    die.options.advantageMode = mode;
+    roll.options.advantageMode = mode;
 
     roll.resetFormula();
   }
@@ -161,26 +133,6 @@ function handlePostRollConfiguration(rolls) {
 // --- Exports ---
 
 export function initNetAdvantage() {
-  // Try the specific hook first
-  Hooks.on("renderD20RollConfigurationDialog", (app, element, options) => {
-    injectNetAdvantageUI(app, element);
-  });
-
-  Hooks.on("renderAttackRollConfigurationDialog", (app, element, options) => {
-    injectNetAdvantageUI(app, element);
-  });
-
-  // Fallback: catch all ApplicationV2 renders and filter by class name
-  Hooks.on("renderApplication", (app, element, options) => {
-    const name = app.constructor.name;
-    if (name === "D20RollConfigurationDialog" || name === "AttackRollConfigurationDialog") {
-      injectNetAdvantageUI(app, element);
-    }
-  });
-
-  // Post-configuration: fires after the dialog closes with fully-built D20Roll instances.
-  // _pendingNetAdvantage is already set by the button click listeners above.
-  Hooks.on("dnd5e.postRollConfiguration", (rolls) => {
-    handlePostRollConfiguration(rolls);
-  });
+  Hooks.on("renderD20RollConfigurationDialog", injectNetAdvantageUI);
+  Hooks.on("dnd5e.postRollConfiguration", handlePostRollConfiguration);
 }

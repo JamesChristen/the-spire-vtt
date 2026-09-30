@@ -25,6 +25,9 @@
       "Hit": "hit",
       "Dice": "dice",
       "SpellDC": "spell DC"
+    },
+    "Potions": {
+      "TabLabel": "Potions"
     }
   }
 }

@@ -237,6 +237,21 @@
   font-size: 0.8rem;
 }
 
+/* Chat message: GM-only award button (injected at render) + award announcement */
+.spire-award-xp {
+  margin-top: 0.3rem;
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.spire-xp-award {
+  padding: 0.3rem 0.5rem;
+  font-size: 0.85rem;
+  border-left: 3px solid #544e80;
+  border-radius: 2px;
+  background: rgba(84, 78, 128, 0.08);
+}
+
 /* GM Config Window */
 .spire-group-config {
   padding: 0.5rem;
