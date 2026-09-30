@@ -5,7 +5,7 @@
 import { WeaponGroupConfig } from "./WeaponGroupConfig.mjs";
 import { getSheetTabPanel } from "./sheet-tabs.mjs";
 import {
-  MODULE_ID, getGroups, getActivityGroup, getGroupScaling, getUnlockedMilestones, levelFromXp,
+  MODULE_ID, getGroups, getActivityGroup, getGroupScaling, getUnlockedMilestones, levelFromXp, xpForLevel,
   getToHitBonus, getSpellSaveDcBonus, getFlatDamageBonus,
   findBaseRoll, baseRollDice, getActivityBaseDice,
 } from "./group-data.mjs";
@@ -225,9 +225,12 @@ export function renderWeaponGroupsSection(app, element) {
       mainRow.appendChild(xpValue);
     }
 
+    // "/ 145 XP" — total XP at which the next level is reached (omitted if the group has no DDN)
+    const nextXp = xpForLevel(level + 1, group.ddn ?? 0);
     const xpLabel = document.createElement("span");
     xpLabel.className = "group-xp-label";
-    xpLabel.textContent = "XP";
+    xpLabel.textContent = nextXp === null ? "XP" : `/ ${nextXp} XP`;
+    if (nextXp !== null) xpLabel.title = `${nextXp - xp} XP to Lv ${level + 1}`;
     mainRow.appendChild(xpLabel);
 
     groupDiv.appendChild(mainRow);

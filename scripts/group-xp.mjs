@@ -225,7 +225,7 @@ function spellLevel(activity) {
 // --- GM award button on group chat cards ---
 
 /**
- * renderChatMessageHTML — (message, html). Adds a GM-only "Award XP" button to the group info
+ * dnd5e.renderChatMessage — (message, html). Adds a GM-only "Award XP" button to the group info
  * card posted on activity use. Injected at render so players never see it.
  */
 export function handleRenderChatMessage(message, html) {

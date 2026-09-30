@@ -29,7 +29,8 @@ export class WeaponGroupConfig extends HandlebarsApplicationMixin(ApplicationV2)
       icon: "fas fa-swords",
       resizable: true,
     },
-    position: { width: 700, height: "auto" },
+    // Fixed height (not "auto") so the window can't grow past the screen; the group list scrolls.
+    position: { width: 700, height: 750 },
     form: {
       handler: WeaponGroupConfig.#onSubmit,
       closeOnSubmit: false,

@@ -70,6 +70,15 @@ export function levelFromXp(xp, ddn) {
   return level;
 }
 
+// Total XP needed to reach `level` from 0 (sum of the incremental costs), or null if the group
+// has no DDN and so can't level.
+export function xpForLevel(level, ddn) {
+  if (!ddn || ddn <= 0) return null;
+  let total = 0;
+  for (let l = 0; l < level; l++) total += levelUpCost(l, ddn);
+  return total;
+}
+
 export function getGroupXp(actor, groupId) {
   return actor.getFlag(MODULE_ID, "groupXp")?.[groupId] ?? 0;
 }

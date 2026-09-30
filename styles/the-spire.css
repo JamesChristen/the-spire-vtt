@@ -143,11 +143,15 @@
   flex: 1;
 }
 
+/* Fixed widths on level + XP label keep the XP boxes aligned across groups
+   (sized for "Lv 99" and "/ 9999 XP") */
 .dnd5e2 .group-level {
   font-weight: bold;
   color: #18520b;
   font-size: 0.85rem;
   flex-shrink: 0;
+  width: 2.75rem;
+  text-align: right;
 }
 
 .dnd5e2 .group-xp-input {
@@ -165,6 +169,9 @@
 .dnd5e2 .group-xp-label {
   font-size: 0.75rem;
   color: #7a7971;
+  flex-shrink: 0;
+  width: 4.5rem;
+  white-space: nowrap;
 }
 
 .dnd5e2 .group-row-detail {
@@ -237,6 +244,20 @@
   font-size: 0.8rem;
 }
 
+/* Chat damage breakdown: labelled flat terms (damage-labels.mjs) */
+.dice-tooltip .dice .dice-rolls .spire-constant {
+  display: inline-flex;
+  align-items: baseline;
+}
+
+.dice-tooltip .dice .dice-rolls .spire-constant-label {
+  margin-left: 2px;
+  font-size: var(--font-size-10, 0.625rem);
+  font-weight: normal;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
 /* Chat message: GM-only award button (injected at render) + award announcement */
 .spire-award-xp {
   margin-top: 0.3rem;
@@ -252,9 +273,26 @@
   background: rgba(84, 78, 128, 0.08);
 }
 
-/* GM Config Window */
-.spire-group-config {
-  padding: 0.5rem;
+/* GM Config Window — fixed-height window; the group list scrolls, the action buttons stay put */
+#spire-weapon-group-config .window-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.spire-group-config .spire-group-config-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 0.5rem;
+}
+
+.spire-group-config .weapon-group-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.25rem;
 }
 
 .spire-group-config .weapon-group-entry {
